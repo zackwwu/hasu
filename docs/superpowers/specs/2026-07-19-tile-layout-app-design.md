@@ -126,6 +126,13 @@ Project ──▶ Room ──▶ Surface ──▶ SurfaceTileGroup ◀── Ti
 
 Links a tile group to a rectangular region of a surface. One surface can have multiple tile groups (e.g., a border strip + center band + field tile). Regions must not overlap and must cover every pixel of the surface.
 
+**Region validation rules:**
+
+1. **Overlap check** — when adding/editing a region, compute intersection with all other regions on the same surface. If any intersection area > 0, reject with error: "Regions overlap — adjust boundaries."
+2. **Coverage check** — sum of all region areas must equal surface area (W × H). If uncovered gaps remain after adding/editing, show warning: "Uncovered area on surface" with a highlight overlay on the gap. The tiler must assign a tile group to all areas before layout can compute.
+3. **Validation timing** — validate on region save, not live during editing. Show errors inline on the Surface Detail screen next to the region list.
+4. **Presets guarantee coverage** — when using "Full surface" preset with a single tile group, validation always passes. Multi-group configurations require manual sizing or preset combinations that tile the surface.
+
 | Field | Type | Notes |
 |-------|------|-------|
 | surfaceId | UUID | |
@@ -170,11 +177,13 @@ Common combinations: 4 edge strips + center field (5 tile groups), or center ban
 |-------|------|-------|
 | id | UUID | |
 | surfaceId | UUID | |
-| tiles | List\<PlacedTile\> | each: {x, y, w, h, isCut, cutEdges[], tileGroupId} |
+| tiles | List\<PlacedTile\> | each: {x, y, w, h, rotation, isCut, cutEdges[], tileGroupId} |
 | computedAt | timestamp | |
 | stale | bool | true when params changed since last compute |
 
-`cutEdges` is an array of edges that are cut: `["left"]`, `["right"]`, `["bottom"]`, `["right", "bottom"]` (corner cut), etc.
+`rotation` is degrees (0, 45, 90, etc.). 0 for grid/brick/stacked patterns. 45 or -45 for herringbone.
+
+`cutEdges` is an array of edges that are cut: `["left"]`, `["right"]`, `["bottom"]`, `["right", "bottom"]` (corner cut), etc. Edges are relative to the tile's local axes (pre-rotation).
 
 Stale is set true when any input changes (surface dims, tile size, offset, region). Recomputation is debounced (~100ms after last change during fine-tuning).
 
@@ -187,8 +196,9 @@ Stale is set true when any input changes (surface dims, tile size, offset, regio
 For a given region (regionW × regionH) and tile (tileW × tileH) with grout width g:
 
 ```
-unitW = tileW + groutW
-unitH = tileH + groutH
+g = surface.groutWidth
+unitW = tileW + g
+unitH = tileH + g
 fullCols = floor(regionW / unitW)
 fullRows = floor(regionH / unitH)
 remainderW = regionW - (fullCols * unitW)
@@ -240,7 +250,34 @@ for row in 0..fullRows:
 | **Grid** | Standard columns × rows. Symmetry check on both axes. |
 | **Brick** | 50% horizontal offset on every other row. Symmetry check on row pairs. |
 | **Stacked** | No horizontal offset between rows. Vertical grout lines run straight. |
-| **Herringbone** | Tiles at 45°. Placed as rotated bounding boxes in a staggered grid. |
+| **Herringbone** | Tiles at ±45°. See Herringbone Algorithm below. |
+
+### Herringbone Algorithm
+
+Tiles alternate between +45° and -45° rotation, forming a V or zigzag pattern. Each tile's bounding box (the axis-aligned rect that contains the rotated tile) determines placement spacing.
+
+```
+diagW = tileW * cos45° + tileH * cos45°   // bounding box width of rotated tile
+diagH = tileW * sin45° + tileH * sin45°   // bounding box height (same for square-ish tiles)
+stepX = tileH * cos45°                     // horizontal step between adjacent tiles
+stepY = tileH * sin45°                     // vertical step
+
+for row in grid:
+    for col in grid:
+        if (row + col) % 2 == 0:
+            rotation = +45°
+        else:
+            rotation = -45°
+        x = col * stepX
+        y = row * stepY
+        // clip to region bounds, mark isCut if clipped
+```
+
+**Symmetry:** Center the bounding grid within the region. Edge tiles are clipped to the region boundary — these become trapezoidal or triangular cuts.
+
+**Sliver-cut elimination:** Apply the 30% threshold to the clipped dimension measured along the tile's local axis (not the region axis). If a clipped piece is < 30% of the tile's length along that axis, shift the grid origin inward by half-step.
+
+**cutEdges for herringbone:** Edges are in the tile's local coordinate space (pre-rotation). A tile clipped by the region's left boundary gets `cutEdges: ["left"]` relative to its own orientation — the Render Engine applies the rotation transform when drawing the cut annotation.
 
 ### Multi-Group Surfaces
 
@@ -285,6 +322,8 @@ Plus a "Top-Down" toggle for the floor perspective.
 
 **Tap to select:** Tap a surface in the 3D view to select it. An info card appears with an "Edit Layout" button that jumps to the Layout tab with that surface pre-selected. The 3D view serves as the primary navigation hub between surfaces.
 
+**Hit testing:** Surfaces can overlap in isometric projection. Resolve taps using reverse painter's order (front-most surface wins). For each visible surface, project its 4 corners to screen coordinates and test point-in-polygon. First match in front-to-back order is the selected surface. If the tap lands in the floor-only region (no wall overlap), select the floor directly.
+
 **Draw order** (painter's algorithm, back-to-front): floor → back walls → side walls → front wall. Ordering recalculates when the view angle changes.
 
 The same `drawSurface()` code runs through `canvas.transform(matrix)` — textures skew correctly, grout lines stay aligned.
@@ -324,6 +363,12 @@ Walls only lock with walls. Floors only lock with floors. Wall↔floor locking h
 |---|---|
 | Horizontal (dx) | ✅ same dx |
 | Vertical (dy — depth) | ✅ same dy |
+
+### Undo
+
+Single-level undo for fine-tuning drag. Each drag gesture (finger down → finger up) snapshots the prior offset before applying the new one. Tapping "Undo" restores that snapshot. Only the most recent drag is undoable — a second drag overwrites the undo buffer. This is lightweight (one `{x, y}` per SurfaceTileGroup) and covers the most common mistake: overshooting a drag.
+
+Undo state is transient — not persisted to SQLite. Navigating away from the Layout tab clears it.
 
 ### Reset Options
 
