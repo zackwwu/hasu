@@ -410,8 +410,22 @@ Uses Flutter's `camera` plugin + edge detection (e.g., `edge_detection` package 
 1. Tiler creates a project: gives it a name, selects units (mm/in)
 2. Inside the project, tiler creates a room: name + overall dimensions (width × depth × height)
 3. Tiler selects which surfaces to include (front/back/left/right wall + floor, all default on)
-4. A **help button (!)** shows a perspective diagram: "You" standing at the doorway, with front/back/left/right walls and floor labeled from that viewpoint
+4. A **help button (!)** next to the "SURFACES" label opens a perspective diagram overlay
 5. Room dimensions auto-compute surface positions — no coordinate entry needed
+
+### Help Diagram: "Where are you standing?"
+
+Tapping the `!` icon opens a modal showing a first-person perspective of someone standing at the room's doorway, looking into the room. This avoids any technical coordinate language:
+
+- **Front wall** — the wall directly ahead, facing you
+- **Back wall** — the wall behind you (with the doorway)
+- **Left wall** — the wall to your left
+- **Right wall** — the wall to your right
+- **Floor** — under your feet
+
+A small top-down inset also shows the room layout from above, with a "You" marker and a direction arrow. The tiler simply checks which surfaces they need, and the app handles all 3D coordinate math internally.
+
+This diagram appears as a one-time reference — after the first use, the convention is established. The surface toggle chips on the create screen serve as a quick reminder.
 
 ### Surface Positioning
 
