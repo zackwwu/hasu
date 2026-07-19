@@ -68,19 +68,32 @@ Texture Capture ────┘                     ▼
 ### Entity Relationship
 
 ```
-Room ──▶ Surface ──▶ SurfaceTileGroup ◀── TileGroup
-                         │
-                         ▼
-                    LayoutResult (computed, cached)
+Project ──▶ Room ──▶ Surface ──▶ SurfaceTileGroup ◀── TileGroup
+                                    │
+                                    ▼
+                               LayoutResult (computed, cached)
 ```
+
+### Project
+
+| Field | Type | Notes |
+|-------|------|-------|
+| id | UUID | |
+| name | String | e.g. "Smith Residence" |
+| units | enum | `mm` or `in` (consistent across all rooms in the project) |
+| createdAt | timestamp | |
+| rooms | List\<Room\> | |
 
 ### Room
 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | |
+| projectId | UUID | |
 | name | String | e.g. "Bathroom 3F" |
-| units | enum | `mm` or `in` |
+| width | double | overall room width, for auto-positioning walls |
+| depth | double | overall room depth, for auto-positioning walls |
+| height | double | overall room height, for auto-positioning walls |
 | surfaces | List\<Surface\> | |
 
 ### Surface
@@ -299,15 +312,21 @@ Tiler can pick an existing image from the device gallery. Imported images skip e
 
 ## Room Modeling UX
 
+### Creating a Project and Room
+
+1. Tiler creates a project: gives it a name, selects units (mm/in)
+2. Inside the project, tiler creates a room: name + overall dimensions (width × depth × height)
+3. Room dimensions are used to auto-compute surface positions (walls at edges, floor at bottom)
+4. Tiler can then customize individual surfaces
+
 ### Adding Surfaces
 
-1. Tiler creates a room: gives it a name, selects units (mm/in)
-2. Taps "Add Wall" or "Add Floor"
-3. Enters dimensions: width, height (for walls) or width, depth (for floors)
-4. Positions the surface relative to the room origin:
+1. Inside a room, tiler taps "Add Wall" or "Add Floor"
+2. Enters dimensions: width, height (for walls) or width, depth (for floors)
+3. Positions the surface relative to the room origin:
    - For MVP: preset positions (front, back, left, right wall + floor) with auto-computed 3D coordinates based on room dimensions
    - Stretch: free-form 3D positioning
-5. Tiler assigns tile groups to the surface (creates SurfaceTileGroup records)
+4. Tiler assigns tile groups to the surface (creates SurfaceTileGroup records)
 
 ### Surface → Tile Group Assignment
 
@@ -324,16 +343,17 @@ Tiler can pick an existing image from the device gallery. Imported images skip e
 
 ```
 Home (Project List)
-  └── Room Editor
-        ├── Surfaces tab (list of walls/floors)
-        │     └── Surface detail (dimensions, tile groups, grout)
-        ├── Tile Library tab (all tile groups)
-        │     └── Tile detail / texture capture
-        ├── Layout tab (2D elevation + fine-tuning)
-        └── Preview tab (3D isometric + export)
+  └── Project detail (Room List)
+        └── Room Editor
+              ├── Surfaces tab (list of walls/floors)
+              │     └── Surface detail (dimensions, tile groups, grout)
+              ├── Tile Library tab (all tile groups)
+              │     └── Tile detail / texture capture
+              ├── Layout tab (2D elevation + fine-tuning)
+              └── Preview tab (3D isometric + export)
 ```
 
-Bottom navigation bar with 4 tabs. Room-level context (which room is being edited).
+Project list → tap project → room list → tap room → Room Editor with 4 bottom tabs.
 
 ---
 
