@@ -7,24 +7,27 @@
 
 ## Overview
 
-A mobile app for professional tilers to design tile layouts on walls and floors, and generate rendered preview images to show clients. The app captures tile textures via camera, computes optimal tile placement with symmetry and balance, renders precise 2D elevation views with dimension markings, and produces isometric 3D room previews.
+A mobile app for professional tilers to design tile layouts on walls and floors, and generate rendered preview images to show clients. The app captures tile textures via camera, computes optimal tile placement with symmetry and balance, renders precise 2D elevation views with dimension markings, produces isometric 3D room previews, and generates a cut list for on-site work.
 
 ---
 
 ## Core Features (MVP)
 
-1. **Room modeling** — tilers add walls and floors with measurements (width, height, depth) and relative 3D positions
-2. **Tile groups** — tilers define tile groups (name, size per tile) and assign them to wall/floor regions
-3. **Texture capture** — camera-based tile scanning (edge detect + perspective correct) to capture color + texture
-4. **Texture import** — alternative: pick an existing image for the tile pattern
-5. **Grout color** — per surface: black, grey, or white
-6. **Auto-layout** — algorithm computes initial layout with symmetry, visual balance, and sliver-cut elimination
-7. **Dimensioned render** — precise 2D elevation with wall/floor dimensions, tile sizes, and cut-tile labels
-8. **Fine-tuning** — tiler selects a surface, drags to shift tile layout, optionally locks parallel surfaces to move together
+1. **Project & room modeling** — tilers create projects (e.g., "Smith Residence") containing multiple rooms. Each room has overall width × depth × height. Surfaces (walls, floors) are auto-positioned from room dimensions. A help diagram shows front/back/left/right from the doorway perspective.
+2. **Tile groups** — defined at the project level, reusable across rooms. Each group has a name, tile size (width × height), and a captured or imported texture.
+3. **Texture capture** — camera-based tile scanning (edge detect + perspective correct) to capture color + texture. Corner guides like a document scanner.
+4. **Texture import** — alternative: pick an existing image from the device gallery, manually crop to a square.
+5. **Grout color** — per surface: black, grey, or white. Configurable grout width (default 3mm).
+6. **Auto-layout** — algorithm computes initial layout with symmetry, visual balance, and sliver-cut elimination (no cut piece < 30% of a full tile).
+7. **Dimensioned render** — precise 2D elevation with surface dimensions, tile sizes, and cut-tile labels (horizontal/vertical arrows with mm dimensions).
+8. **Fine-tuning** — tiler selects a surface, drags to shift tile layout. Lock parallel surfaces to move together (axis-aware: horizontal only propagates to parallel walls, vertical propagates to all walls since they share "up" in 3D). Walls and floors are adjusted independently.
+9. **Cut list** — generated from approved layouts. Groups identical cuts by tile group + dimensions + cut shape, showing per-surface quantities and locations.
 
-### Stretch Goal
+### Stretch Goals
 
 - Align grout lines where walls meet floors (requires computing shared-edge intersection in 3D)
+- Swipe-to-orbit in 3D view (instead of discrete 90° rotation buttons)
+- Notch cuts for obstacles (pipes, outlets)
 
 ---
 
@@ -38,28 +41,34 @@ All rendering via Flutter's `CustomPainter` on Canvas. No widget-per-tile (doesn
 
 ```
 Room Modeler ──▶ Layout Engine ──▶ Render Engine ──▶ Preview / Export
-                     ▲                    │
-Tile Library ────────┘                    │
-     ▲                                    │
-Texture Capture ────┘                     ▼
-                                    Local Storage (SQLite)
+     │                  ▲                    │              │
+     │                  │                    │              ▼
+     │   Tile Library ──┘                    │        Cut List Generator
+     │        ▲                             │
+     │        │                             │
+     │   Texture Capture                    │
+     │                                      │
+     └──────────────────────────────────────┘
+                  Local Storage (SQLite)
 ```
 
-### 5 Core Modules
+### 6 Core Modules
 
 | Module | Responsibility |
 |--------|---------------|
-| **Room Modeler** | Define walls/floors, dimensions, positions in 3D space, assign tile groups to surface regions |
-| **Tile Library** | Define tile groups (name, tileWidth, tileHeight, texture), manage captured/imported textures |
-| **Texture Capture** | Camera → edge detection → perspective correction → save texture to Tile Library |
+| **Room Modeler** | Define projects, rooms, surfaces. Auto-position walls/floors from room dimensions. Assign tile groups to surface regions. |
+| **Tile Library** | Project-level. Define tile groups (name, tileWidth, tileHeight, texture). Capture/import textures. Reusable across rooms. |
+| **Texture Capture** | Camera → edge detection → perspective correction → save texture to Tile Library. |
 | **Layout Engine** | Pure Dart: compute optimal tile placement per surface region. Symmetry, sliver-cut elimination, pattern variants. |
 | **Render Engine** | CustomPainter: draw tiles with textures, grout lines, dimension annotations, cut markings. 2D elevation + 3D isometric. Export to high-res PNG. |
+| **Cut List Generator** | Walk all LayoutResults, group identical cuts (tile group + dimensions + cut shape), list per-surface locations and quantities. |
 
 ### Key Architectural Rules
 
 - Layout Engine outputs data (`List<PlacedTile>`), Render Engine paints pixels. No coupling.
 - 2D and 3D rendering share the same `drawSurface()` code. Isometric just wraps it in `canvas.transform(matrix)`.
 - Textures skew correctly under the isometric transform automatically (Canvas handles it).
+- Cut List Generator is read-only — it walks LayoutResults, no modification.
 
 ---
 
@@ -69,9 +78,12 @@ Texture Capture ────┘                     ▼
 
 ```
 Project ──▶ Room ──▶ Surface ──▶ SurfaceTileGroup ◀── TileGroup
-                                    │
-                                    ▼
-                               LayoutResult (computed, cached)
+  │                                    │                 │
+  │                                    ▼                 │
+  │                               LayoutResult            │
+  │                                    │                  │
+  │                                    ▼                  │
+  └────────────────────────── CutList (generated) ◀───────┘
 ```
 
 ### Project
@@ -83,6 +95,7 @@ Project ──▶ Room ──▶ Surface ──▶ SurfaceTileGroup ◀── Ti
 | units | enum | `mm` or `in` (consistent across all rooms in the project) |
 | createdAt | timestamp | |
 | rooms | List\<Room\> | |
+| tileGroups | List\<TileGroup\> | project-level tile library, reusable across rooms |
 
 ### Room
 
@@ -104,14 +117,14 @@ Project ──▶ Room ──▶ Surface ──▶ SurfaceTileGroup ◀── Ti
 | type | enum | `wall` or `floor` |
 | width | double | in room units |
 | height | double | in room units (for floors: depth) |
-| position | {x,y,z} + rotation | relative to room origin (floor corner where front + left walls meet), for 3D assembly |
+| position | {x,y,z} + rotation | auto-computed from room dims + surface type. Room origin = floor corner where front + left walls meet. |
 | groutColor | enum | `black`, `grey`, `white` |
 | groutWidth | double | default 3mm |
 | tileAssignments | List\<SurfaceTileGroup\> | |
 
 ### SurfaceTileGroup (join)
 
-Links a tile group to a region of a surface. One surface can have multiple tile groups (e.g., border + field).
+Links a tile group to a rectangular region of a surface. One surface can have multiple tile groups (e.g., a border strip + center band + field tile). Regions must not overlap and must cover every pixel of the surface.
 
 | Field | Type | Notes |
 |-------|------|-------|
@@ -122,13 +135,29 @@ Links a tile group to a region of a surface. One surface can have multiple tile 
 | offset | {x, y} | manual fine-tune drag offset |
 | locked | bool | transient: sync movement with selected surface |
 
-Non-overlapping regions per surface. Each region is laid out independently by the Layout Engine.
+### Region Presets
+
+Regions are defined as a rectangle `{x, y, w, h}` on the surface. The app provides presets as shortcuts (W = surface width, H = surface height, s = tiler-specified strip size):
+
+| Preset | Rectangle |
+|--------|-----------|
+| Full surface | `{0, 0, W, H}` |
+| Top strip | `{0, 0, W, s}` |
+| Bottom strip | `{0, H-s, W, s}` |
+| Left strip | `{0, 0, s, H}` |
+| Right strip | `{W-s, 0, s, H}` |
+| Horizontal center band | `{0, (H-s)/2, W, s}` |
+| Vertical center band | `{(W-s)/2, 0, s, H}` |
+| Custom | `{x, y, w, h}` — tiler enters all values manually |
+
+Common combinations: 4 edge strips + center field (5 tile groups), or center band + top/bottom field (3 tile groups).
 
 ### TileGroup
 
 | Field | Type | Notes |
 |-------|------|-------|
 | id | UUID | |
+| projectId | UUID | tile groups belong to a project, reusable across rooms |
 | name | String | e.g. "White subway tile" |
 | tileWidth | double | single tile width |
 | tileHeight | double | single tile height |
@@ -141,9 +170,11 @@ Non-overlapping regions per surface. Each region is laid out independently by th
 |-------|------|-------|
 | id | UUID | |
 | surfaceId | UUID | |
-| tiles | List\<PlacedTile\> | each: {x, y, w, h, isCut, cutEdge, tileGroupId} |
+| tiles | List\<PlacedTile\> | each: {x, y, w, h, isCut, cutEdges[], tileGroupId} |
 | computedAt | timestamp | |
 | stale | bool | true when params changed since last compute |
+
+`cutEdges` is an array of edges that are cut: `["left"]`, `["right"]`, `["bottom"]`, `["right", "bottom"]` (corner cut), etc.
 
 Stale is set true when any input changes (surface dims, tile size, offset, region). Recomputation is debounced (~100ms after last change during fine-tuning).
 
@@ -199,6 +230,7 @@ for row in 0..fullRows:
         w = min(tileW, regionW - x)
         h = min(tileH, regionH - y)
         isCut = (w < tileW) or (h < tileH)
+        cutEdges = determineCutEdges(x, y, w, h, regionW, regionH)
 ```
 
 ### Pattern Variants
@@ -240,7 +272,20 @@ ix = (sx - sy) * cos30° + ox
 iy = (sx + sy) * sin30° - sz + oy
 ```
 
-**Draw order** (painter's algorithm, back-to-front): floor → back walls → side walls → front wall. Static isometric angle — no camera rotation, so ordering is deterministic.
+**Rotation:** ◀ and ▶ arrow buttons overlaid on the 3D view. Each tap rotates the room by 90°, showing a different wall pair:
+
+| Angle | Visible walls |
+|-------|---------------|
+| 0° | Front + Left |
+| 90° | Front + Right |
+| 180° | Back + Right |
+| 270° | Back + Left |
+
+Plus a "Top-Down" toggle for the floor perspective.
+
+**Tap to select:** Tap a surface in the 3D view to select it. An info card appears with an "Edit Layout" button that jumps to the Layout tab with that surface pre-selected. The 3D view serves as the primary navigation hub between surfaces.
+
+**Draw order** (painter's algorithm, back-to-front): floor → back walls → side walls → front wall. Ordering recalculates when the view angle changes.
 
 The same `drawSurface()` code runs through `canvas.transform(matrix)` — textures skew correctly, grout lines stay aligned.
 
@@ -250,6 +295,7 @@ No dimension labels on 3D view. Clean preview for client approval.
 
 - **2D:** Render to `ui.Image` via `PictureRecorder`. Save as PNG at 150–300 DPI. One image per surface. Full dimension labels. For tilers/crew.
 - **3D:** Single isometric room render as PNG. No labels. For client approval.
+- **Cut List:** Share as text or screenshot. Grouped by tile group, with per-surface location breakdowns.
 
 ---
 
@@ -257,13 +303,13 @@ No dimension labels on 3D view. Clean preview for client approval.
 
 ### Interaction Flow
 
-1. **Select surface** — tap in sidebar or in 3D room view. 2D elevation fills the main canvas.
-2. **Drag** — one-finger drag anywhere on canvas shifts the tile grid. Offset {x, y} updates live. Wrap-around: tiles exiting one edge reappear on the opposite edge. Cuts recalculate in real-time.
-3. **Lock + drag** — toggle lock on other surfaces. Drag selected surface → locked surfaces shift per the axis rules below.
+1. **Select surface** — tap in 3D room view (primary) or via surface selector chips on Layout tab (secondary). 2D elevation fills the main canvas.
+2. **Drag** — one-finger drag anywhere on canvas shifts the tile grid. Offset {x, y} overlay updates live in the top-left corner. Wrap-around: tiles exiting one edge reappear on the opposite edge. Cuts recalculate in real-time. Blue drag handles on edges for single-axis adjustment.
+3. **Lock + drag** — toggle lock chips below the canvas. Drag selected surface → locked surfaces shift per the axis rules below. Lock state is transient, not saved to the project.
 
 ### Lock Propagation Rules
 
-Walls only lock with walls. Floors only lock with floors. Wall↔floor locking has no effect for MVP.
+Walls only lock with walls. Floors only lock with floors. Wall↔floor locking has no effect for MVP (tilers align them manually).
 
 **Walls:**
 
@@ -279,34 +325,81 @@ Walls only lock with walls. Floors only lock with floors. Wall↔floor locking h
 | Horizontal (dx) | ✅ same dx |
 | Vertical (dy — depth) | ✅ same dy |
 
+### Reset Options
+
+- **Reset to auto layout** — discard all manual offsets, revert to Layout Engine's computed positions
+- **Snap to center** — set offset to {0, 0} (centered layout)
+
 ### What Drag Changes
 
 Dragging modifies `SurfaceTileGroup.offset`. This triggers `LayoutResult.stale = true`, then a debounced recompute (~100ms after finger lifts). The Layout Engine reruns with the new offset; the Canvas repaints.
 
 Fine-tuning does not change tile sizes or pattern. It only shifts the grid origin.
 
+### Cut Summary
+
+Below the 2D canvas, a summary lists every cut on the current surface — which edge, how many tiles, and the cut dimension. Updates live as the tiler drags.
+
+---
+
+## Cut List
+
+### Generation
+
+Generated from all `LayoutResult.tiles` across all surfaces in a room:
+
+1. Walk all tiles where `isCut == true`
+2. Group by compound key: `{tileGroupId, width, height, cutEdges}`
+3. For each group, track per-surface locations and counts: `[{surfaceId, surfaceName, count}]`
+4. Sort: by tile group, then by dimensions (largest first)
+
+### Display
+
+Each row shows:
+- **Mini shape diagram** — small rectangle with red dashed lines on cut edges, annotated with dimensions
+- **Dimensions** — e.g., "91 × 200mm"
+- **Cut type** — e.g., "Right edge cut", "Corner cut (right + bottom)"
+- **Tile group name** — e.g., "White subway"
+- **Applied to** — chip badges showing each surface and per-surface count: "Front wall ×5", "Left wall ×5"
+- **Total quantity badge** — red pill, e.g., "×15"
+
+Group headers show the tile group name, full tile size, and total full tile count.
+
+### Summary Bar
+
+At the top: total full tiles, total cut tiles, and count of unique cut sizes.
+
+### Cut Shape Types
+
+| Type | Description |
+|------|-------------|
+| Edge cut | One side narrower or shorter than the full tile |
+| Corner cut (L-shape) | Cut on two adjacent edges — tile is narrower AND shorter |
+| Notch cut | Stretch: cutout for pipes, outlets, etc. |
+
 ---
 
 ## Texture Capture
 
-### Flow
+### Camera Flow
 
-1. Tiler opens camera (fullscreen, guides overlay)
-2. Positions tile within edge-detection guides (like document scanner)
-3. App detects rectangular edges, highlights the detected rectangle
-4. Tiler confirms → app perspective-corrects to a flat square image
-5. Shows preview. Tiler can retake or save.
-6. Saved texture is stored in Tile Library, assigned a TileGroup.
+1. Tiler taps "Capture" from the Tile Library → fullscreen camera opens
+2. Corner guides overlaid (like document scanner) — position the tile within the guides on a contrasting surface
+3. Edge detection finds the 4 corners of the tile and snaps guides to them
+4. Tiler taps capture button → app perspective-corrects to a flat square image
+5. Review screen: shows the corrected square result, with fields for tile name, width, and height
+6. "Save to Tile Library" → texture saved, TileGroup created
 
-### Implementation
+### Import Flow
 
-Uses Flutter's `camera` plugin + edge detection package (e.g., `edge_detection` or custom Canny edge detection via OpenCV FFI). Perspective correction uses a 4-point homography transform — same math as every document scanner app.
+1. Tiler taps "Import" from the Tile Library → device gallery opens
+2. Select image → manual crop to square
+3. Enter tile name, width, height
+4. Save to Tile Library
 
-Captured images are stored in the app's local document directory. SQLite stores the file path.
+### Technical
 
-### Import Alternative
-
-Tiler can pick an existing image from the device gallery. Imported images skip edge detection but can be cropped to a square manually.
+Uses Flutter's `camera` plugin + edge detection (e.g., `edge_detection` package or custom Canny via OpenCV FFI). Perspective correction uses a 4-point homography transform. Captured images stored in the app's local document directory. SQLite stores the file path.
 
 ---
 
@@ -316,26 +409,36 @@ Tiler can pick an existing image from the device gallery. Imported images skip e
 
 1. Tiler creates a project: gives it a name, selects units (mm/in)
 2. Inside the project, tiler creates a room: name + overall dimensions (width × depth × height)
-3. Room dimensions are used to auto-compute surface positions (walls at edges, floor at bottom)
-4. Tiler can then customize individual surfaces
+3. Tiler selects which surfaces to include (front/back/left/right wall + floor, all default on)
+4. A **help button (!)** shows a perspective diagram: "You" standing at the doorway, with front/back/left/right walls and floor labeled from that viewpoint
+5. Room dimensions auto-compute surface positions — no coordinate entry needed
 
-### Adding Surfaces
+### Surface Positioning
 
-1. Inside a room, tiler taps "Add Wall" or "Add Floor"
-2. Enters dimensions: width, height (for walls) or width, depth (for floors)
-3. Positions the surface relative to the room origin:
-   - For MVP: preset positions (front, back, left, right wall + floor) with auto-computed 3D coordinates based on room dimensions
-   - Stretch: free-form 3D positioning
-4. Tiler assigns tile groups to the surface (creates SurfaceTileGroup records)
+Surfaces are auto-positioned from room dimensions:
+- Front wall at z=0, facing inward, spanning full width × height
+- Back wall at z=depth, facing inward
+- Left wall at x=0, facing inward, spanning full depth × height
+- Right wall at x=width, facing inward
+- Floor at y=0, facing up, spanning full width × depth
 
-### Surface → Tile Group Assignment
+Tiler can toggle off unused surfaces (e.g., only tiling 2 walls). For MVP, surface dimensions and positions are derived from room dimensions — not freely editable.
 
-1. Select a surface
-2. Tap "Add Tile Group"
-3. Choose from Tile Library
-4. Define the region on the surface this group occupies (default: full surface)
-5. Select pattern type (default: grid)
-6. Select grout color for the surface
+### Surface Detail Screen
+
+Editing a surface shows:
+- **Dimensions** — width, height (read-only for MVP since they derive from room)
+- **Grout** — color picker (3 circles: white/grey/black) + width input
+- **Tile groups on this surface** — each shows thumbnail, name, a tappable REGION chip (▸ opens region editor), and a tappable PATTERN chip (▸ opens pattern picker)
+- **+ Add tile group from library** — opens tile group picker
+- **Delete this surface** — with confirmation
+
+### Region Editor
+
+Tapping a REGION chip opens:
+- **Preset picker** — Full surface / Top strip / Bottom strip / Left strip / Right strip / H-center band / V-center band / Custom
+- **Size input** — for strips/bands: the strip width/height in mm. For custom: x, y, w, h.
+- **Mini preview** — live wall preview showing how this region fits with other groups on the surface
 
 ---
 
@@ -343,17 +446,21 @@ Tiler can pick an existing image from the device gallery. Imported images skip e
 
 ```
 Home (Project List)
-  └── Project detail (Room List)
-        └── Room Editor
-              ├── Surfaces tab (list of walls/floors)
-              │     └── Surface detail (dimensions, tile groups, grout)
-              ├── Tile Library tab (all tile groups)
-              │     └── Tile detail / texture capture
-              ├── Layout tab (2D elevation + fine-tuning)
-              └── Preview tab (3D isometric + export)
+  └── Project detail
+        ├── Segmented control: [Rooms] | [Tile Library]
+        │
+        ├── [Rooms tab] → tap room → Room Editor
+        │     ├── Surfaces tab (list of walls/floors)
+        │     │     └── Surface detail (dimensions, tile groups, grout, region/pattern editors)
+        │     ├── Layout tab (2D elevation + fine-tuning + cut summary)
+        │     ├── Preview tab (3D isometric + rotation + export)
+        │     └── Cut List tab (grouped cuts with per-surface locations)
+        │
+        └── [Tile Library tab] (project-level)
+              ├── List of tile groups with texture thumbnails, sizes, usage info
+              ├── + Add (Capture or Import)
+              └── Edit tile group (name, dimensions, recapture/replace texture)
 ```
-
-Project list → tap project → room list → tap room → Room Editor with 4 bottom tabs.
 
 ---
 
@@ -373,8 +480,10 @@ Project list → tap project → room list → tap room → Room Editor with 4 b
 - Cloud sync / multi-device
 - User accounts / auth
 - PDF export (PNG only)
-- Free-form 3D room positioning (preset positions only)
+- Free-form 3D room positioning (auto-computed from room dims only)
 - Wall↔floor grout alignment (stretch goal)
+- Swipe-to-orbit in 3D view (discrete 90° buttons only)
 - Complex tile patterns beyond grid/brick/stacked/herringbone
+- Notch cuts for obstacles (stretch goal)
 - Undo/redo history
 - Price estimation / materials calculation
