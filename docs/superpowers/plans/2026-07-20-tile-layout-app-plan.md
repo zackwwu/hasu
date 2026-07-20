@@ -46,6 +46,7 @@ lib/
     isometric_painter.dart      # 3D room view CustomPainter
     cut_annotation_painter.dart # Cut tile markers + dimension labels
     export_service.dart         # Render to PNG via PictureRecorder
+    texture_loader.dart         # Load + cache tile texture images from disk
 
   cutlist/
     cut_list_generator.dart     # Walk LayoutResults → grouped CutEntry list
@@ -449,6 +450,7 @@ class SurfacePosition {
 class Surface {
   final String id;
   final String roomId;
+  String name; // e.g. "Front wall", "Floor"
   SurfaceType type;
   double width;
   double height; // for floors: depth
@@ -459,6 +461,7 @@ class Surface {
   Surface({
     String? id,
     required this.roomId,
+    required this.name,
     required this.type,
     required this.width,
     required this.height,
@@ -470,6 +473,7 @@ class Surface {
   Map<String, dynamic> toMap() => {
         'id': id,
         'room_id': roomId,
+        'name': name,
         'type': type.name,
         'width': width,
         'height': height,
@@ -491,6 +495,7 @@ class Surface {
     return Surface(
       id: map['id'] as String,
       roomId: map['room_id'] as String,
+      name: map['name'] as String,
       type: SurfaceType.values.byName(map['type'] as String),
       width: (map['width'] as num).toDouble(),
       height: (map['height'] as num).toDouble(),
@@ -832,6 +837,7 @@ class AppDatabase {
       CREATE TABLE surfaces (
         id TEXT PRIMARY KEY,
         room_id TEXT NOT NULL,
+        name TEXT NOT NULL,
         type TEXT NOT NULL,
         width REAL NOT NULL,
         height REAL NOT NULL,
@@ -923,37 +929,43 @@ git commit -m "feat: create SQLite database schema"
 
 ```dart
 // lib/storage/project_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../models/project.dart';
 import 'database.dart';
 
 class ProjectRepository {
+  final Future<Database> Function() _getDb;
+
+  ProjectRepository({Future<Database> Function()? getDb})
+      : _getDb = getDb ?? (() => AppDatabase.instance);
+
   Future<List<Project>> findAll() async {
-    final db = await AppDatabase.instance;
+    final db = await _getDb();
     final maps = await db.query('projects', orderBy: 'created_at DESC');
     return maps.map(Project.fromMap).toList();
   }
 
   Future<Project?> findById(String id) async {
-    final db = await AppDatabase.instance;
+    final db = await _getDb();
     final maps = await db.query('projects', where: 'id = ?', whereArgs: [id]);
     if (maps.isEmpty) return null;
     return Project.fromMap(maps.first);
   }
 
   Future<void> insert(Project project) async {
-    final db = await AppDatabase.instance;
+    final db = await _getDb();
     await db.insert('projects', project.toMap(),
         conflictAlgorithm: ConflictAlgorithm.replace);
   }
 
   Future<void> update(Project project) async {
-    final db = await AppDatabase.instance;
+    final db = await _getDb();
     await db.update('projects', project.toMap(),
         where: 'id = ?', whereArgs: [project.id]);
   }
 
   Future<void> delete(String id) async {
-    final db = await AppDatabase.instance;
+    final db = await _getDb();
     await db.delete('projects', where: 'id = ?', whereArgs: [id]);
   }
 }
@@ -963,6 +975,7 @@ class ProjectRepository {
 
 ```dart
 // lib/storage/tile_group_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../models/tile_group.dart';
 import 'database.dart';
 
@@ -1014,6 +1027,7 @@ class TileGroupRepository {
 
 ```dart
 // lib/storage/room_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../models/room.dart';
 import 'database.dart';
 
@@ -1056,6 +1070,7 @@ class RoomRepository {
 
 ```dart
 // lib/storage/surface_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../models/surface.dart';
 import '../models/surface_tile_group.dart';
 import 'database.dart';
@@ -1130,6 +1145,7 @@ class SurfaceRepository {
 
 ```dart
 // lib/storage/layout_result_repository.dart
+import 'package:sqflite/sqflite.dart';
 import '../models/layout_result.dart';
 import '../models/placed_tile.dart';
 import 'database.dart';
@@ -1212,6 +1228,7 @@ void main() {
 ```dart
 // test/storage/project_repository_test.dart
 import 'package:flutter_test/flutter_test.dart';
+import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:tile_layout/models/project.dart';
 import 'package:tile_layout/storage/project_repository.dart';
@@ -1219,13 +1236,17 @@ import 'package:tile_layout/storage/database.dart';
 
 void main() {
   late ProjectRepository repo;
+  late Database db;
 
   setUpAll(() => sqfliteFfiInit());
 
   setUp(() async {
-    // Use a fresh in-memory DB each test by temporarily swapping
-    // We'll use the real DB but test with integration approach
-    repo = ProjectRepository();
+    db = await AppDatabase.inMemory();
+    repo = ProjectRepository(getDb: () async => db);
+  });
+
+  tearDown(() async {
+    await db.close();
   });
 
   test('insert and find project', () async {
@@ -1324,6 +1345,7 @@ class SurfacePositionCalculator {
     if (includeFront) {
       surfaces.add(Surface(
         roomId: roomId,
+        name: 'Front wall',
         type: SurfaceType.wall,
         width: roomWidth,
         height: roomHeight,
@@ -1335,6 +1357,7 @@ class SurfacePositionCalculator {
     if (includeBack) {
       surfaces.add(Surface(
         roomId: roomId,
+        name: 'Back wall',
         type: SurfaceType.wall,
         width: roomWidth,
         height: roomHeight,
@@ -1347,10 +1370,11 @@ class SurfacePositionCalculator {
     if (includeLeft) {
       surfaces.add(Surface(
         roomId: roomId,
+        name: 'Left wall',
         type: SurfaceType.wall,
         width: roomDepth,
         height: roomHeight,
-        position: const SurfacePosition(x: 0, y: 0, z: roomDepth, rotation: 90),
+        position: SurfacePosition(x: 0, y: 0, z: roomDepth, rotation: 90),
       ));
     }
 
@@ -1358,6 +1382,7 @@ class SurfacePositionCalculator {
     if (includeRight) {
       surfaces.add(Surface(
         roomId: roomId,
+        name: 'Right wall',
         type: SurfaceType.wall,
         width: roomDepth,
         height: roomHeight,
@@ -1369,6 +1394,7 @@ class SurfacePositionCalculator {
     if (includeFloor) {
       surfaces.add(Surface(
         roomId: roomId,
+        name: 'Floor',
         type: SurfaceType.floor,
         width: roomWidth,
         height: roomDepth,
@@ -1418,6 +1444,7 @@ void main() {
     );
 
     final front = surfaces.first;
+    expect(front.name, 'Front wall');
     expect(front.width, 2000);
     expect(front.height, 2400);
     expect(front.position.z, 0);
@@ -1735,13 +1762,19 @@ class LayoutEngine {
       remainderH = region.height - (fullRows * unitH);
     }
 
-    // Center for symmetry, then apply manual offset
-    double startX = remainderW / 2 + offsetX;
-    double startY = remainderH / 2 + offsetY;
+    // Center for symmetry, then apply manual offset with wrap-around
+    double baseStartX = remainderW / 2;
+    double baseStartY = remainderH / 2;
+    // Wrap offset: tiles exiting one edge reappear on the opposite
+    double wrappedOffsetX = offsetX % unitW;
+    double wrappedOffsetY = offsetY % unitH;
+    double startX = baseStartX + wrappedOffsetX;
+    double startY = baseStartY + wrappedOffsetY;
 
     final tiles = <PlacedTile>[];
-    for (int row = 0; row <= fullRows; row++) {
-      for (int col = 0; col <= fullCols; col++) {
+    // Extend range by 1 in each direction to catch wrapped tiles
+    for (int row = -1; row <= fullRows + 1; row++) {
+      for (int col = -1; col <= fullCols + 1; col++) {
         final x = startX + col * unitW;
         final y = startY + row * unitH;
 
@@ -1797,27 +1830,29 @@ class LayoutEngine {
 
     double startY = remainderH / 2 + offsetY;
 
+    // Row-pair symmetry: compute column count using the offset row (worst case)
+    // so both even and odd rows get the same edge cuts.
+    final offsetRowW = region.width - halfUnitW;
+    int fullCols = (offsetRowW / unitW).floor();
+    double remainderW = offsetRowW - (fullCols * unitW);
+
+    if (remainderW > 0 && remainderW < tileGroup.tileWidth * minCutRatio) {
+      fullCols -= 1;
+      remainderW = offsetRowW - (fullCols * unitW);
+    }
+
+    // Centering based on the offset row; even row gets an extra half-tile on each side
+    final offsetRowStartX = halfUnitW + remainderW / 2;
+    final evenRowStartX = remainderW / 2;
+
     final tiles = <PlacedTile>[];
     for (int row = 0; row <= fullRows; row++) {
       final y = startY + row * unitH;
-      final rowOffset = (row % 2 == 0) ? 0.0 : halfUnitW;
+      final isOffsetRow = row % 2 != 0;
+      double startX = (isOffsetRow ? offsetRowStartX : evenRowStartX) + offsetX;
+      final colCount = isOffsetRow ? fullCols : fullCols + 1;
 
-      // For brick pattern, compute horizontal fit with the offset
-      final effectiveStart = rowOffset + offsetX;
-      final shiftedRegionW = region.width - effectiveStart;
-
-      int fullCols = (shiftedRegionW / unitW).floor();
-      double remainderW = shiftedRegionW - (fullCols * unitW);
-
-      if (remainderW > 0 && remainderW < tileGroup.tileWidth * minCutRatio) {
-        fullCols -= 1;
-        remainderW = shiftedRegionW - (fullCols * unitW);
-      }
-
-      // Don't center brick rows individually — apply a single global offset
-      double startX = effectiveStart + remainderW / 2;
-
-      for (int col = 0; col <= fullCols; col++) {
+      for (int col = 0; col <= colCount; col++) {
         final x = startX + col * unitW;
         if (x >= region.width || y >= region.height) continue;
         if (x + tileGroup.tileWidth <= 0) continue;
@@ -2337,6 +2372,7 @@ git commit -m "feat: cut list generator with grouping by dimensions, edges, surf
 
 ```dart
 // lib/render/surface_painter.dart
+import 'dart:math';
 import 'dart:ui' as ui;
 import 'package:flutter/material.dart';
 import '../models/placed_tile.dart';
@@ -2488,17 +2524,18 @@ class SurfacePainter extends CustomPainter {
     const dashGap = 3.0;
     final dx = end.dx - start.dx;
     final dy = end.dy - start.dy;
-    final length = (dx * dx + dy * dy);
-    final total = dashWidth + dashGap;
+    final length = sqrt(dx * dx + dy * dy);
+    if (length == 0) return;
+    final unitX = dx / length;
+    final unitY = dy / length;
 
     double distance = 0;
-    while (distance * distance < length) {
-      final t1 = distance / (distance + (total - dashWidth));
-      final t2 = (distance + dashWidth) / (distance + total);
-      final p1 = Offset(start.dx + dx * t1, start.dy + dy * t1);
-      final p2 = Offset(start.dx + dx * t2, start.dy + dy * t2);
+    while (distance < length) {
+      final dashEnd = min(distance + dashWidth, length);
+      final p1 = Offset(start.dx + unitX * distance, start.dy + unitY * distance);
+      final p2 = Offset(start.dx + unitX * dashEnd, start.dy + unitY * dashEnd);
       canvas.drawLine(p1, p2, paint);
-      distance += total;
+      distance += dashWidth + dashGap;
     }
   }
 
@@ -2786,7 +2823,7 @@ class ExportService {
     required SurfacePainter painter,
     required double surfaceWidth,
     required double surfaceHeight,
-    required int dpi,
+    int dpi = 200,
   }) async {
     final scale = dpi / 25.4; // pixels per mm at given DPI
     final width = (surfaceWidth * scale).round();
@@ -2854,6 +2891,72 @@ git add lib/render/export_service.dart
 git commit -m "feat: PNG export service for 2D and 3D renders"
 ```
 
+### Task 12b: Texture loading service
+
+**Files:**
+- Create: `lib/render/texture_loader.dart`
+
+- [ ] **Step 1: Write texture_loader.dart**
+
+```dart
+// lib/render/texture_loader.dart
+import 'dart:io';
+import 'dart:ui' as ui;
+import 'package:flutter/foundation.dart';
+import '../models/tile_group.dart';
+
+class TextureLoader {
+  final Map<String, ui.Image> _cache = {};
+
+  /// Get a cached texture, or load it from disk.
+  Future<ui.Image?> getTexture(TileGroup tileGroup) async {
+    if (_cache.containsKey(tileGroup.id)) {
+      return _cache[tileGroup.id];
+    }
+
+    if (tileGroup.texturePath == null) return null;
+
+    final file = File(tileGroup.texturePath!);
+    if (!await file.exists()) return null;
+
+    final bytes = await file.readAsBytes();
+    final codec = await ui.instantiateImageCodec(bytes);
+    final frame = await codec.getNextFrame();
+    final image = frame.image;
+
+    _cache[tileGroup.id] = image;
+    return image;
+  }
+
+  /// Build the full texture cache for a list of tile groups.
+  Future<Map<String, ui.Image>> loadAll(List<TileGroup> tileGroups) async {
+    final result = <String, ui.Image>{};
+    for (final tg in tileGroups) {
+      final img = await getTexture(tg);
+      if (img != null) result[tg.id] = img;
+    }
+    return result;
+  }
+
+  /// Evict a single texture (e.g., after recapture).
+  void evict(String tileGroupId) {
+    _cache.remove(tileGroupId);
+  }
+
+  /// Clear entire cache (e.g., on project switch).
+  void clear() {
+    _cache.clear();
+  }
+}
+```
+
+- [ ] **Step 2: Commit**
+
+```bash
+git add lib/render/texture_loader.dart
+git commit -m "feat: texture loader with caching for tile group images"
+```
+
 ---
 
 ## Phase 5: State Management & UI
@@ -2881,6 +2984,7 @@ import '../storage/room_repository.dart';
 import '../storage/surface_repository.dart';
 import '../storage/tile_group_repository.dart';
 import '../storage/layout_result_repository.dart';
+import '../render/texture_loader.dart';
 
 // --- Repositories ---
 final projectRepoProvider = Provider((ref) => ProjectRepository());
@@ -2888,6 +2992,9 @@ final roomRepoProvider = Provider((ref) => RoomRepository());
 final surfaceRepoProvider = Provider((ref) => SurfaceRepository());
 final tileGroupRepoProvider = Provider((ref) => TileGroupRepository());
 final layoutResultRepoProvider = Provider((ref) => LayoutResultRepository());
+
+// --- Texture loading ---
+final textureLoaderProvider = Provider((ref) => TextureLoader());
 
 // --- Project list ---
 final projectsProvider = FutureProvider<List<Project>>((ref) async {
@@ -2952,14 +3059,8 @@ final surfaceLockedProvider = StateProvider.family<bool, String>(
 );
 
 class UndoEntry {
-  final String surfaceId;
-  final double offsetX;
-  final double offsetY;
-  const UndoEntry({
-    required this.surfaceId,
-    required this.offsetX,
-    required this.offsetY,
-  });
+  final Map<String, Offset> priorOffsets; // stgId → prior {offsetX, offsetY}
+  const UndoEntry({required this.priorOffsets});
 }
 
 final undoBufferProvider = StateProvider<UndoEntry?>((ref) => null);
@@ -4542,6 +4643,7 @@ class LayoutTab extends ConsumerStatefulWidget {
 
 class _LayoutTabState extends ConsumerState<LayoutTab> {
   Offset _dragOffset = Offset.zero;
+  bool _isDragging = false;
 
   @override
   Widget build(BuildContext context) {
@@ -4587,12 +4689,11 @@ class _LayoutTabState extends ConsumerState<LayoutTab> {
             Expanded(
               child: selected != null
                   ? GestureDetector(
+                      onPanStart: (_) => _onDragStart(selected, surfaces),
                       onPanUpdate: (details) {
                         setState(() => _dragOffset += details.delta);
                       },
-                      onPanEnd: (_) {
-                        // Save offset to provider (integration task wires full save)
-                      },
+                      onPanEnd: (_) => _onDragEnd(selected, surfaces),
                       child: Container(
                         margin: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
@@ -4668,15 +4769,22 @@ class _LayoutTabState extends ConsumerState<LayoutTab> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _dragOffset = Offset.zero),
+                      onPressed: _resetToAuto,
                       child: const Text('Reset', style: TextStyle(fontSize: 12)),
                     ),
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _dragOffset = Offset.zero),
+                      onPressed: () => _snapToCenter(selected),
                       child: const Text('Snap to Center', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: _undo,
+                      child: const Text('Undo', style: TextStyle(fontSize: 12)),
                     ),
                   ),
                 ],
@@ -4690,9 +4798,114 @@ class _LayoutTabState extends ConsumerState<LayoutTab> {
     );
   }
 
+  /// Snapshot current offsets before drag begins (for undo).
+  void _onDragStart(Surface selected, List<Surface> surfaces) {
+    _isDragging = true;
+    // Save current offsets of all affected STGs (selected + locked) to undo buffer
+    final affectedIds = _getAffectedSurfaceIds(selected, surfaces);
+    final priorOffsets = <String, Offset>{};
+    for (final id in affectedIds) {
+      priorOffsets[id] = ref.read(surfaceOffsetsProvider(id));
+    }
+    ref.read(undoBufferProvider.notifier).state = UndoEntry(priorOffsets: priorOffsets);
+  }
+
+  /// On drag end: persist offsets to SurfaceTileGroups, propagate to locked
+  /// surfaces, and mark layout results stale.
+  void _onDragEnd(Surface selected, List<Surface> surfaces) {
+    _isDragging = false;
+    final delta = _dragOffset;
+    setState(() => _dragOffset = Offset.zero);
+
+    // Apply delta to selected surface
+    _applyOffset(selected.id, delta);
+
+    // Lock propagation (axis-aware per spec)
+    final lockedSurfaces = surfaces.where((s) =>
+        s.id != selected.id && ref.read(surfaceLockedProvider(s.id)));
+
+    for (final locked in lockedSurfaces) {
+      final propagated = _propagateDelta(selected, locked, delta);
+      if (propagated != Offset.zero) {
+        _applyOffset(locked.id, propagated);
+      }
+    }
+  }
+
+  /// Apply offset delta to a surface's SurfaceTileGroups and mark stale.
+  void _applyOffset(String surfaceId, Offset delta) {
+    final current = ref.read(surfaceOffsetsProvider(surfaceId));
+    ref.read(surfaceOffsetsProvider(surfaceId).notifier).state = current + delta;
+    // Mark layout stale — integration task wires the debounced recompute
+  }
+
+  /// Axis-aware lock propagation per spec:
+  /// - Walls: horizontal (dx) propagates only to parallel walls;
+  ///   vertical (dy) propagates to all walls (shared "up" axis).
+  /// - Floors: both dx and dy propagate to other floors.
+  Offset _propagateDelta(Surface source, Surface target, Offset delta) {
+    if (source.type == SurfaceType.floor && target.type == SurfaceType.floor) {
+      return delta; // floors propagate both axes
+    }
+    if (source.type == SurfaceType.wall && target.type == SurfaceType.wall) {
+      final isParallel = _areParallelWalls(source, target);
+      return Offset(
+        isParallel ? delta.dx : 0, // horizontal only if parallel
+        delta.dy, // vertical always propagates between walls
+      );
+    }
+    return Offset.zero; // wall↔floor: no propagation in MVP
+  }
+
+  bool _areParallelWalls(Surface a, Surface b) {
+    // Walls at rotation 0/180 are parallel (front/back)
+    // Walls at rotation 90/270 are parallel (left/right)
+    final aAxis = a.position.rotation % 180;
+    final bAxis = b.position.rotation % 180;
+    return aAxis == bAxis;
+  }
+
+  List<String> _getAffectedSurfaceIds(Surface selected, List<Surface> surfaces) {
+    final ids = [selected.id];
+    for (final s in surfaces) {
+      if (s.id != selected.id && ref.read(surfaceLockedProvider(s.id))) {
+        ids.add(s.id);
+      }
+    }
+    return ids;
+  }
+
+  void _resetToAuto() {
+    final selectedId = ref.read(selectedSurfaceIdProvider);
+    if (selectedId != null) {
+      ref.read(surfaceOffsetsProvider(selectedId).notifier).state = Offset.zero;
+    }
+  }
+
+  void _snapToCenter(Surface? selected) {
+    if (selected != null) {
+      ref.read(surfaceOffsetsProvider(selected.id).notifier).state = Offset.zero;
+    }
+  }
+
+  void _undo() {
+    final entry = ref.read(undoBufferProvider);
+    if (entry == null) return;
+    for (final e in entry.priorOffsets.entries) {
+      ref.read(surfaceOffsetsProvider(e.key).notifier).state = e.value;
+    }
+    ref.read(undoBufferProvider.notifier).state = null;
+  }
+
   String _surfaceLabel(Surface s) {
-    // Simple label — full labeling in integration task
-    return s.type == SurfaceType.wall ? 'Wall' : 'Floor';
+    if (s.type == SurfaceType.floor) return 'Floor';
+    switch (s.position.rotation.toInt()) {
+      case 0: return 'Front';
+      case 90: return 'Left';
+      case 180: return 'Back';
+      case 270: return 'Right';
+      default: return 'Wall';
+    }
   }
 }
 ```
