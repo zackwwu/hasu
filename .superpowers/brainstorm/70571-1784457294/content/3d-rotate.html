@@ -1,0 +1,158 @@
+<h2>3D View — Rotating the Room</h2>
+<p class="subtitle">Swipe horizontally to orbit, or tap view presets</p>
+
+<div style="display:flex; gap:24px; margin-top:16px;">
+
+  <!-- Screen 1: Default view (front-left angle) -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Default — Front + Left visible</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:4px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:14px; font-weight:bold;">Bathroom 3F</span>
+    </div>
+
+    <!-- View angle presets -->
+    <div style="display:flex; gap:4px; padding:6px 12px; background:#f0f0f0;">
+      <div style="flex:1; background:#2563eb; color:#fff; padding:6px; border-radius:6px; text-align:center; font-size:10px; font-weight:bold;">Front-Left</div>
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Front-Right</div>
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Back-Left</div>
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Top-Down</div>
+    </div>
+
+    <!-- 3D room — front-left angle -->
+    <div style="margin:8px 12px; background:#f8f6f0; border-radius:10px; min-height:260px; display:flex; align-items:center; justify-content:center;">
+
+      <svg width="260" height="220" viewBox="0 0 260 220">
+        <!-- Floor -->
+        <polygon points="130,195 20,140 130,85 240,140"
+                 fill="#ddd0b8" stroke="#888" stroke-width="1.2"/>
+
+        <!-- Left wall -->
+        <polygon points="20,140 20,20 130,-25 130,85"
+                 fill="#f0e8d5" stroke="#999" stroke-width="1"/>
+
+        <!-- Front wall -->
+        <polygon points="130,85 240,140 240,20 130,-25"
+                 fill="#f0e8d5" stroke="#999" stroke-width="1"/>
+
+        <!-- Tile lines on front wall -->
+        <line x1="150" y1="70" x2="150" y2="-10" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="170" y1="55" x2="170" y2="-25" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="190" y1="40" x2="190" y2="-20" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="210" y1="25" x2="210" y2="-15" stroke="#ddd" stroke-width="0.5"/>
+
+        <!-- Tile lines on left wall -->
+        <line x1="40" y1="130" x2="40" y2="10" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="60" y1="118" x2="60" y2="-2" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="80" y1="106" x2="80" y2="-14" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="100" y1="94" x2="100" y2="-26" stroke="#ddd" stroke-width="0.5"/>
+
+        <!-- Labels -->
+        <text x="130" y="170" text-anchor="middle" font-size="10" fill="#888">Floor</text>
+        <text x="100" y="70" text-anchor="middle" font-size="10" fill="#888">Left wall</text>
+        <text x="185" y="55" text-anchor="middle" font-size="10" fill="#888">Front wall</text>
+      </svg>
+
+    </div>
+
+    <div style="text-align:center; font-size:10px; color:#888; margin-bottom:8px;">
+      ← Swipe to orbit →
+    </div>
+
+    </div>
+  </div>
+
+  <!-- Screen 2: Swiped to Front-Right view -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Swiped right → Front + Right visible</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:4px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:14px; font-weight:bold;">Bathroom 3F</span>
+    </div>
+
+    <!-- View angle presets -->
+    <div style="display:flex; gap:4px; padding:6px 12px; background:#f0f0f0;">
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Front-Left</div>
+      <div style="flex:1; background:#2563eb; color:#fff; padding:6px; border-radius:6px; text-align:center; font-size:10px; font-weight:bold;">Front-Right</div>
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Back-Left</div>
+      <div style="flex:1; background:#e8e8e8; padding:6px; border-radius:6px; text-align:center; font-size:10px; color:#888;">Top-Down</div>
+    </div>
+
+    <!-- 3D room — front-right angle -->
+    <div style="margin:8px 12px; background:#f8f6f0; border-radius:10px; min-height:260px; display:flex; align-items:center; justify-content:center;">
+
+      <svg width="260" height="220" viewBox="0 0 260 220">
+        <!-- Floor -->
+        <polygon points="130,195 20,140 130,85 240,140"
+                 fill="#ddd0b8" stroke="#888" stroke-width="1.2"/>
+
+        <!-- Front wall -->
+        <polygon points="20,140 20,20 130,-25 130,85"
+                 fill="#f0e8d5" stroke="#999" stroke-width="1"/>
+
+        <!-- Right wall -->
+        <polygon points="130,85 240,140 240,20 130,-25"
+                 fill="#f0e8d5" stroke="#999" stroke-width="1"/>
+
+        <!-- Tile lines on right wall -->
+        <line x1="150" y1="70" x2="150" y2="-10" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="170" y1="55" x2="170" y2="-25" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="190" y1="40" x2="190" y2="-20" stroke="#ddd" stroke-width="0.5"/>
+        <line x1="210" y1="25" x2="210" y2="-15" stroke="#ddd" stroke-width="0.5"/>
+
+        <!-- Labels -->
+        <text x="130" y="170" text-anchor="middle" font-size="10" fill="#888">Floor</text>
+        <text x="90" y="60" text-anchor="middle" font-size="10" fill="#888">Front wall</text>
+        <text x="180" y="55" text-anchor="middle" font-size="10" fill="#888">Right wall</text>
+      </svg>
+
+    </div>
+
+    <div style="text-align:center; font-size:10px; color:#888; margin-bottom:8px;">
+      ← Swipe to orbit →
+    </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;">
+
+  <h3>How It Works</h3>
+
+  <div style="display:flex; gap:16px;">
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:16px;">
+      <h4 style="margin:0 0 8px; font-size:14px;">MVP: Discrete views</h4>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.6;">
+        <strong>4 preset buttons</strong> at the top:<br/>
+        • Front-Left (default)<br/>
+        • Front-Right<br/>
+        • Back-Left<br/>
+        • Top-Down<br/>
+        Each is just a different isometric angle. Zero extra complexity — same math, different angle parameter.
+      </p>
+    </div>
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:16px;">
+      <h4 style="margin:0 0 8px; font-size:14px;">Stretch: Swipe to orbit</h4>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.6;">
+        Horizontal swipe rotates the camera around the room. Isometric angle updates on each frame. But painter's algorithm needs to reorder surfaces when one occludes another — that's the complex part.
+      </p>
+    </div>
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:16px;">
+      <h4 style="margin:0 0 8px; font-size:14px;">Top-Down view</h4>
+      <p style="font-size:13px; color:var(--text-secondary); line-height:1.6;">
+        Shows floor + wall positions from above. Useful for checking floor tile layout and grout alignment. Walls appear as lines at the room perimeter.
+      </p>
+    </div>
+
+  </div>
+
+</div>

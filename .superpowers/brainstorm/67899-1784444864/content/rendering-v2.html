@@ -1,0 +1,82 @@
+<h2>Rendering — Cut Tile Annotation</h2>
+<p class="subtitle">How cut dimensions should read</p>
+
+<div style="display:flex; gap:24px; margin-top:20px;">
+
+  <!-- Before: confusing -->
+  <div style="flex:1;">
+    <h4 style="color:#f87171; margin:0 0 12px;">❌ Confusing</h4>
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; text-align:center;">
+      <div style="display:inline-block; background:#999; padding:3px;">
+        <div style="display:grid; grid-template-columns:60px 60px 60px 35px; gap:3px;">
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#e8dcc8; height:50px; border-right:2px dashed #e44; position:relative;">
+            <span style="position:absolute; bottom:2px; right:2px; font-size:9px; color:#e44;">91mm</span>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:12px; color:var(--text-secondary); margin:8px 0 0;">Number slapped on — unclear what it measures.</p>
+    </div>
+  </div>
+
+  <!-- After: correct -->
+  <div style="flex:1;">
+    <h4 style="color:#34d399; margin:0 0 12px;">✅ Correct</h4>
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; text-align:center;">
+      <div style="display:inline-block; background:#999; padding:3px; position:relative;">
+
+        <!-- Full tile width reference -->
+        <div style="position:absolute; top:-22px; left:0; width:180px; text-align:center;">
+          <span style="font-size:10px; color:#333; font-family:monospace;">← 3 × 300mm full tiles →</span>
+        </div>
+
+        <div style="display:grid; grid-template-columns:60px 60px 60px 35px; gap:3px;">
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#e8dcc8; height:50px;"></div>
+          <div style="background:#fef0f0; height:50px; border-right:2px dashed #e44; position:relative;">
+            <!-- Horizontal arrow across cut tile -->
+            <div style="position:absolute; bottom:-18px; left:0; width:100%;">
+              <div style="border-top:1px solid #e44; width:100%;"></div>
+              <div style="width:0; height:0; border-left:4px solid transparent; border-right:4px solid transparent; border-top:5px solid #e44; margin:-5px auto 0;"></div>
+              <span style="font-size:10px; color:#e44; font-weight:bold; font-family:monospace;">91mm</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <p style="font-size:12px; color:var(--text-secondary); margin:8px 0 0;">Horizontal arrow with dimension under cut tile — clearly "this piece is 91mm wide."</p>
+    </div>
+  </div>
+
+</div>
+
+<h3 style="margin-top:28px;">Cut Annotation Rules</h3>
+
+<div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; margin-top:12px;">
+
+  <table style="width:100%; font-size:14px; border-collapse:collapse;">
+    <tr style="border-bottom:1px solid var(--border-color,#333);">
+      <th style="text-align:left; padding:8px 12px; width:30%;">Cut Type</th>
+      <th style="text-align:left; padding:8px 12px;">Annotation</th>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border-color,#333);">
+      <td style="padding:8px 12px; vertical-align:top;">Width cut<br/><span style="font-size:12px; color:var(--text-secondary);">Tile narrower than full</span></td>
+      <td style="padding:8px 12px;">Horizontal arrow ↔ spanning the cut tile, labeled "91mm"<br/>Red dashed line on the cut edge of the tile</td>
+    </tr>
+    <tr style="border-bottom:1px solid var(--border-color,#333);">
+      <td style="padding:8px 12px; vertical-align:top;">Height cut<br/><span style="font-size:12px; color:var(--text-secondary);">Tile shorter than full</span></td>
+      <td style="padding:8px 12px;">Vertical arrow ↕ spanning the cut tile, labeled "45mm"<br/>Red dashed line on the cut edge</td>
+    </tr>
+    <tr>
+      <td style="padding:8px 12px; vertical-align:top;">Corner cut<br/><span style="font-size:12px; color:var(--text-secondary);">Cut in both axes</span></td>
+      <td style="padding:8px 12px;">Both horizontal and vertical arrows<br/>Two red dashed edges (L-shape)</td>
+    </tr>
+  </table>
+
+</div>
+
+<div style="margin-top:28px;">
+  <a href="http://localhost:58808" style="font-size:13px; color:var(--text-secondary);">Full rendering spec on previous screen</a>
+</div>

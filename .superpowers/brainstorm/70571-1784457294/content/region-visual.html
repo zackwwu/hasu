@@ -1,0 +1,144 @@
+<h2>Region Model — Visual Guide</h2>
+<p class="subtitle">Every region is a rectangle {x, y, w, h}. Presets are just shortcuts.</p>
+
+<div style="display:flex; gap:24px; margin-top:16px; align-items:start;">
+
+  <!-- Wall visualization -->
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:24px; text-align:center;">
+
+    <h3 style="margin:0 0 16px;">Wall Surface 2000 × 1200mm</h3>
+
+    <!-- Main wall -->
+    <div style="display:inline-block; position:relative; width:280px; height:168px; border:3px solid #333; background:#f8f6f0;">
+
+      <!-- Coordinate origin -->
+      <div style="position:absolute; top:-22px; left:-8px; font-size:10px; color:#888; font-family:monospace;">(0,0)</div>
+
+      <!-- Top strip region -->
+      <div style="position:absolute; top:0; left:0; right:0; height:21px; background:rgba(200,216,232,0.5); border-bottom:1px dashed #60a5fa;">
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#2563eb; font-weight:bold;">Top strip</div>
+      </div>
+
+      <!-- Bottom strip region -->
+      <div style="position:absolute; bottom:0; left:0; right:0; height:21px; background:rgba(200,216,232,0.3); border-top:1px dashed #60a5fa;">
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#60a5fa;">Bottom strip</div>
+      </div>
+
+      <!-- Left strip -->
+      <div style="position:absolute; top:0; left:0; bottom:0; width:29px; background:rgba(200,220,200,0.3); border-right:1px dashed #34d399;">
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-90deg); font-size:9px; color:#34d399; white-space:nowrap;">Left</div>
+      </div>
+
+      <!-- Right strip -->
+      <div style="position:absolute; top:0; right:0; bottom:0; width:29px; background:rgba(200,220,200,0.3); border-left:1px dashed #34d399;">
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); font-size:9px; color:#34d399; white-space:nowrap;">Right</div>
+      </div>
+
+      <!-- Center field region -->
+      <div style="position:absolute; top:21px; left:29px; right:29px; bottom:21px; background:rgba(232,220,200,0.6); border:2px solid #f59e0b;">
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:10px; color:#d97706; font-weight:bold;">Center field</div>
+      </div>
+
+      <!-- Annotations -->
+      <div style="position:absolute; right:-36px; top:0; bottom:0; display:flex; align-items:center;">
+        <span style="font-size:10px; color:#888; writing-mode:vertical-rl;">1200mm</span>
+      </div>
+      <div style="position:absolute; bottom:-16px; left:0; right:0; text-align:center;">
+        <span style="font-size:10px; color:#888;">2000mm</span>
+      </div>
+
+    </div>
+
+    <p style="font-size:11px; color:var(--text-secondary); margin-top:12px;">
+      A surface with 5 tile groups: top border, bottom border, left border, right border, center field.
+    </p>
+
+  </div>
+
+  <!-- Preset table -->
+  <div style="width:320px;">
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; margin-bottom:16px;">
+      <h3 style="margin:0 0 12px;">Preset → Rect {x, y, w, h}</h3>
+      <table style="width:100%; font-size:12px; border-collapse:collapse; line-height:1.8;">
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:4px 6px; color:#2563eb; font-weight:bold;">Top strip</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{0, 0, 2000, 150}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:4px 6px; color:#60a5fa;">Bottom strip</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{0, 1050, 2000, 150}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:4px 6px; color:#34d399;">Left strip</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{0, 0, 150, 1200}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:4px 6px; color:#34d399;">Right strip</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{1850, 0, 150, 1200}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:4px 6px; color:#f59e0b;">Full surface</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{0, 0, 2000, 1200}</td>
+        </tr>
+        <tr>
+          <td style="padding:4px 6px; color:#f87171;">Custom</td>
+          <td style="padding:4px 6px; color:#888; font-family:monospace;">{x, y, w, h} — you define</td>
+        </tr>
+      </table>
+    </div>
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px;">
+      <h4 style="margin:0 0 8px;">Region Stacking Rules</h4>
+      <ul style="font-size:12px; color:var(--text-secondary); line-height:1.7; margin:0; padding-left:16px;">
+        <li>Regions on a surface <strong>do not overlap</strong></li>
+        <li>Every pixel of the surface must be covered by <strong>exactly one</strong> region</li>
+        <li>Presets auto-fill adjacent regions to avoid gaps</li>
+        <li>Custom mode: tiler enters x, y, w, h in mm</li>
+      </ul>
+    </div>
+
+  </div>
+
+</div>
+
+<div style="margin-top:20px;">
+
+  <h3>In the App</h3>
+
+  <div class="mockup" style="max-width:600px; margin:0 auto;">
+    <div class="mockup-body" style="padding:20px; text-align:center;">
+
+    <div style="display:flex; gap:12px; align-items:center;">
+
+      <!-- Step 1 -->
+      <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:24px; margin-bottom:4px;">1</div>
+        <div style="font-weight:bold; font-size:12px;">Pick a preset</div>
+        <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Top strip, 150mm</div>
+      </div>
+
+      <div style="font-size:20px; color:#888;">→</div>
+
+      <!-- Step 2 -->
+      <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:24px; margin-bottom:4px;">2</div>
+        <div style="font-weight:bold; font-size:12px;">See the region</div>
+        <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Highlighted on wall preview</div>
+      </div>
+
+      <div style="font-size:20px; color:#888;">→</div>
+
+      <!-- Step 3 -->
+      <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:14px; text-align:center;">
+        <div style="font-size:24px; margin-bottom:4px;">3</div>
+        <div style="font-weight:bold; font-size:12px;">Assign tile</div>
+        <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Blue mosaic from library</div>
+      </div>
+
+    </div>
+
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,11 @@
+{"type":"server-started","port":58808,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:58808","screen_dir":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content","state_dir":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/state"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/architecture.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/data-model.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/data-model-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/layout-engine.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/rendering.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/rendering-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/fine-tuning.html"}
+{"type":"screen-updated","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/fine-tuning.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/67899-1784444864/content/fine-tuning-v2.html"}
+{"type":"server-stopped","reason":"idle timeout"}

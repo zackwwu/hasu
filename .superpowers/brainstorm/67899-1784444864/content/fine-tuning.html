@@ -1,0 +1,146 @@
+<h2>Fine-Tuning UX</h2>
+<p class="subtitle">Select surface → drag layout → lock others → drag together</p>
+
+<h3>Editor Screen Layout</h3>
+
+<div class="mockup" style="margin-bottom:24px;">
+  <div class="mockup-header">Surface editor — tiler adjusts layout per surface</div>
+  <div class="mockup-body" style="padding:20px;">
+
+  <div style="display:flex; gap:16px;">
+
+    <!-- Main canvas area -->
+    <div style="flex:2; background:#f8f6f0; border:2px solid #333; border-radius:8px; min-height:280px; display:flex; align-items:center; justify-content:center; position:relative;">
+
+      <!-- Tile grid with drag indicator -->
+      <div style="position:relative; background:#999; padding:3px;">
+        <div style="display:grid; grid-template-columns:repeat(5, 52px); grid-template-rows:repeat(4, 52px); gap:3px;">
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:#e8dcc8; border-right:2px dashed #e44;"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:#e8dcc8; border-right:2px dashed #e44;"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:#e8dcc8; border-right:2px dashed #e44;"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:linear-gradient(135deg,#e8dcc8,#d4c8a8);"></div>
+          <div style="background:#e8dcc8; border-right:2px dashed #e44;"></div>
+        </div>
+
+        <!-- Drag handles on edges -->
+        <div style="position:absolute; top:50%; left:-8px; width:14px; height:14px; background:#2563eb; border-radius:50%; transform:translateY(-50%);"></div>
+        <div style="position:absolute; top:50%; right:-8px; width:14px; height:14px; background:#2563eb; border-radius:50%; transform:translateY(-50%);"></div>
+        <div style="position:absolute; left:50%; top:-8px; width:14px; height:14px; background:#2563eb; border-radius:50%; transform:translateX(-50%);"></div>
+        <div style="position:absolute; left:50%; bottom:-8px; width:14px; height:14px; background:#2563eb; border-radius:50%; transform:translateX(-50%);"></div>
+      </div>
+
+      <!-- Offset info overlay -->
+      <div style="position:absolute; top:8px; left:8px; background:rgba(0,0,0,0.75); color:#fff; padding:4px 8px; border-radius:4px; font-family:monospace; font-size:11px;">
+        Offset: x=12mm, y=-5mm
+      </div>
+
+    </div>
+
+    <!-- Sidebar -->
+    <div style="flex:1; display:flex; flex-direction:column; gap:8px;">
+
+      <div style="background:var(--bg-secondary,#1e1e2e); border:2px solid #2563eb; border-radius:8px; padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:14px;">Wall A (front)</strong>
+          <span style="font-size:10px; color:#34d399;">selected</span>
+        </div>
+        <div style="font-size:11px; color:var(--text-secondary);">2000 × 1200mm</div>
+        <div style="font-size:11px; color:var(--text-secondary);">White subway · grid</div>
+      </div>
+
+      <div style="background:var(--bg-secondary,#1e1e2e); border:2px solid transparent; border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong style="font-size:14px;">Wall B (left)</strong>
+          <div style="font-size:11px; color:var(--text-secondary);">1500 × 1200mm</div>
+        </div>
+        <span style="font-size:10px; background:#4f46e5; color:#fff; padding:2px 6px; border-radius:3px;">🔒 locked</span>
+      </div>
+
+      <div style="background:var(--bg-secondary,#1e1e2e); border:2px solid transparent; border-radius:8px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong style="font-size:14px;">Floor</strong>
+          <div style="font-size:11px; color:var(--text-secondary);">2000 × 1500mm</div>
+        </div>
+        <button style="font-size:10px; background:transparent; color:#60a5fa; border:1px solid #60a5fa; padding:2px 6px; border-radius:3px;">lock</button>
+      </div>
+
+      <div style="margin-top:auto; display:flex; gap:8px;">
+        <button style="flex:1; padding:8px; background:#dc2626; color:#fff; border:none; border-radius:6px; font-size:12px;">Reset offset</button>
+        <button style="flex:1; padding:8px; background:#2563eb; color:#fff; border:none; border-radius:6px; font-size:12px;">Apply to all</button>
+      </div>
+    </div>
+
+  </div>
+
+  </div>
+</div>
+
+<h3>Interaction Model</h3>
+
+<div style="display:flex; gap:16px; margin-top:12px;">
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+    <h4 style="margin:0 0 12px;">Step 1: Select a surface</h4>
+    <ul style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0; padding-left:18px; line-height:1.8;">
+      <li>Tap a surface in the sidebar or tap it in the 3D room view</li>
+      <li>Selected surface gets a blue border</li>
+      <li>Its 2D elevation fills the main canvas</li>
+      <li>Blue drag handles appear on edges</li>
+    </ul>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+    <h4 style="margin:0 0 12px;">Step 2: Drag the layout</h4>
+    <ul style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0; padding-left:18px; line-height:1.8;">
+      <li>One-finger drag anywhere on canvas</li>
+      <li>Entire tile grid shifts with finger</li>
+      <li>Wrap-around: tiles exiting left reappear on right</li>
+      <li>Offset {x, y} updates live in the info overlay</li>
+      <li>Cut tiles recalculate in real-time</li>
+    </ul>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+    <h4 style="margin:0 0 12px;">Step 3: Lock + drag together</h4>
+    <ul style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0; padding-left:18px; line-height:1.8;">
+      <li>Toggle lock on other surfaces in sidebar</li>
+      <li>Drag selected surface → locked <strong>parallel</strong> surfaces shift by same delta</li>
+      <li>Perpendicular surfaces: lock has no effect (axes don't match)</li>
+      <li>Use case: keep opposite walls symmetric</li>
+      <li>Lock state is transient, not saved to project</li>
+    </ul>
+  </div>
+
+</div>
+
+<h3 style="margin-top:28px;">What Drag Actually Changes</h3>
+
+<div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; margin-top:12px; font-size:13px; line-height:1.8;">
+
+<p>Dragging modifies <code style="color:#34d399;">SurfaceTileGroup.offset</code> — the starting position of the tile grid relative to the surface origin.</p>
+
+<pre style="background:#1e1e2e; padding:12px; border-radius:4px; font-size:13px; margin:12px 0;">
+  Original:  offset = {x: 91, y: 50}   ← computed by layout engine (centered)
+  After drag: offset = {x: 103, y: 45}  ← user shifted right 12mm, up 5mm
+</pre>
+
+<p>This triggers <code>LayoutResult.stale = true</code>, then a <strong>debounced recompute</strong> (~100ms after finger lifts). The layout engine reruns with the new offset, recalculates cut tiles, and the canvas repaints.</p>
+
+<p style="color:var(--text-secondary);"><strong>Fine-tuning doesn't change tile sizes or pattern.</strong> It only shifts the grid origin. The tiler is moving the same tiles to a better position, not redesigning the layout.</p>
+
+</div>

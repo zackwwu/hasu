@@ -1,0 +1,135 @@
+<h2>Reference: "Where are you standing?"</h2>
+<p class="subtitle">First-person perspective at the doorway — front wall is what you face</p>
+
+<div style="display:flex; gap:24px; margin-top:20px;">
+
+  <!-- Large 3D reference -->
+  <div style="flex:1; min-height:420px; display:flex; align-items:center; justify-content:center; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:24px;">
+
+    <div style="position:relative; width:320px; height:280px;">
+
+      <!-- Ceiling -->
+      <div style="position:absolute; top:0; left:0; width:100%; height:30%; background:linear-gradient(180deg, #e8e0d0 0%, #f0e8d8 100%);">
+
+        <!-- Ceiling-wall edge lines converging to vanishing point -->
+        <svg style="position:absolute; inset:0; width:100%; height:100%;">
+          <!-- Left ceiling edge -->
+          <line x1="0" y1="100%" x2="40%" y2="0" stroke="#bbb" stroke-width="1"/>
+          <!-- Right ceiling edge -->
+          <line x1="100%" y1="100%" x2="60%" y2="0" stroke="#bbb" stroke-width="1"/>
+          <!-- Left wall-ceiling line -->
+          <line x1="20%" y1="100%" x2="40%" y2="0" stroke="#ccc" stroke-width="1"/>
+          <!-- Right wall-ceiling line -->
+          <line x1="80%" y1="100%" x2="60%" y2="0" stroke="#ccc" stroke-width="1"/>
+        </svg>
+
+        <!-- Front wall -->
+        <div style="position:absolute; bottom:0; left:20%; right:20%; height:100%; background:#f5f0e8; border-left:1px solid #aaa; border-right:1px solid #aaa;">
+          <!-- Tile grid on front wall -->
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:1px; background:#ddd; height:100%;">
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+            <div style="background:#faf5ed;"></div>
+          </div>
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); background:rgba(37,99,235,0.9); color:#fff; padding:4px 10px; border-radius:4px; font-size:10px; font-weight:bold;">FRONT WALL</div>
+        </div>
+
+        <!-- Left wall -->
+        <div style="position:absolute; bottom:0; left:0; right:80%; height:100%; background:linear-gradient(90deg, #ede4d0, #f0e8d5); border-right:1px solid #aaa;">
+          <!-- Tile grid on left wall (perspective) -->
+          <div style="position:absolute; top:30%; bottom:0; left:0; right:0; display:flex; flex-direction:column; gap:1px;">
+            <div style="flex:1; background:linear-gradient(90deg, #f5efe0, #f0e8d8); border-bottom:1px solid #e0d8c8;"></div>
+            <div style="flex:1; background:linear-gradient(90deg, #f5efe0, #f0e8d8); border-bottom:1px solid #e0d8c8;"></div>
+            <div style="flex:1; background:linear-gradient(90deg, #f5efe0, #f0e8d8); border-bottom:1px solid #e0d8c8;"></div>
+          </div>
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-90deg); background:rgba(96,165,250,0.9); color:#fff; padding:4px 8px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap;">LEFT</div>
+        </div>
+
+        <!-- Right wall -->
+        <div style="position:absolute; bottom:0; left:80%; right:0; height:100%; background:linear-gradient(-90deg, #ede4d0, #f0e8d5); border-left:1px solid #aaa;">
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); background:rgba(96,165,250,0.9); color:#fff; padding:4px 8px; border-radius:4px; font-size:9px; font-weight:bold; white-space:nowrap;">RIGHT</div>
+        </div>
+      </div>
+
+      <!-- Floor -->
+      <div style="position:absolute; top:30%; left:0; width:100%; height:70%; background:linear-gradient(180deg, #d8c8a8 0%, #c8b898 30%, #b8a888 100%);">
+
+        <!-- Floor perspective lines -->
+        <svg style="position:absolute; inset:0; width:100%; height:100%;">
+          <!-- Left wall-floor edge -->
+          <line x1="20%" y1="0" x2="0" y2="100%" stroke="#aaa" stroke-width="1.5"/>
+          <!-- Right wall-floor edge -->
+          <line x1="80%" y1="0" x2="100%" y2="100%" stroke="#aaa" stroke-width="1.5"/>
+          <!-- Floor tile lines (perspective grid) -->
+          <line x1="25%" y1="0" x2="15%" y2="100%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="30%" y1="0" x2="30%" y2="100%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="40%" y1="0" x2="60%" y2="100%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="70%" y1="0" x2="70%" y2="100%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="75%" y1="0" x2="85%" y2="100%" stroke="#c0b090" stroke-width="0.5"/>
+          <!-- Depth lines -->
+          <line x1="20%" y1="15%" x2="80%" y2="15%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="15%" y1="35%" x2="85%" y2="35%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="10%" y1="60%" x2="90%" y2="60%" stroke="#c0b090" stroke-width="0.5"/>
+          <line x1="5%" y1="85%" x2="95%" y2="85%" stroke="#c0b090" stroke-width="0.5"/>
+        </svg>
+
+        <div style="position:absolute; bottom:30px; right:20px; background:rgba(245,158,11,0.9); color:#fff; padding:4px 8px; border-radius:4px; font-size:10px; font-weight:bold;">FLOOR</div>
+
+      </div>
+
+      <!-- Person at doorway (bottom center) -->
+      <div style="position:absolute; bottom:-5px; left:50%; transform:translateX(-50%); text-align:center; z-index:10;">
+        <!-- Head -->
+        <div style="width:16px; height:16px; background:#f59e0b; border-radius:50%; margin:0 auto;"></div>
+        <!-- Body -->
+        <div style="width:20px; height:16px; background:#2563eb; border-radius:4px; margin:0 auto;"></div>
+        <!-- Direction arrow -->
+        <div style="width:0; height:0; border-left:6px solid transparent; border-right:6px solid transparent; border-top:6px solid #2563eb; margin:0 auto;"></div>
+        <div style="font-size:9px; color:#2563eb; font-weight:bold; margin-top:2px;">YOU</div>
+      </div>
+
+      <!-- Back wall label (behind you) -->
+      <div style="position:absolute; bottom:35px; left:50%; transform:translateX(-50%);">
+        <div style="background:rgba(100,100,100,0.85); color:#fff; padding:3px 8px; border-radius:4px; font-size:9px; white-space:nowrap;">BACK WALL (behind you)</div>
+        <div style="width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-top:5px solid rgba(100,100,100,0.85); margin:0 auto;"></div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- Legend -->
+  <div style="width:260px; display:flex; flex-direction:column; gap:12px;">
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; border-left:4px solid rgba(37,99,235,0.9);">
+      <h4 style="margin:0 0 4px; font-size:14px;">Front Wall</h4>
+      <p style="font-size:12px; color:var(--text-secondary); margin:0;">The wall directly in front of you as you enter the room. Often the focal point.</p>
+    </div>
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; border-left:4px solid rgba(96,165,250,0.9);">
+      <h4 style="margin:0 0 4px; font-size:14px;">Left / Right Wall</h4>
+      <p style="font-size:12px; color:var(--text-secondary); margin:0;">Walls to your left and right as you face the front wall.</p>
+    </div>
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; border-left:4px solid rgba(100,100,100,0.8);">
+      <h4 style="margin:0 0 4px; font-size:14px;">Back Wall</h4>
+      <p style="font-size:12px; color:var(--text-secondary); margin:0;">The wall behind you. This is the wall with the doorway.</p>
+    </div>
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; border-left:4px solid rgba(245,158,11,0.9);">
+      <h4 style="margin:0 0 4px; font-size:14px;">Floor</h4>
+      <p style="font-size:12px; color:var(--text-secondary); margin:0;">The floor of the room, under your feet.</p>
+    </div>
+
+  </div>
+
+</div>

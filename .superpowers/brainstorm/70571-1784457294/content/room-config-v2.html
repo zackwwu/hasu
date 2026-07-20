@@ -1,0 +1,194 @@
+<h2>Room Configuration — Intuitive Surface Positioning</h2>
+<p class="subtitle">No coordinates. Just "where am I standing?"</p>
+
+<div style="display:flex; gap:24px; margin-top:16px;">
+
+  <!-- Screen 1: Room dimensions + surface picker -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Step 1: Room dimensions + surfaces</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:15px; font-weight:bold;">New Room</span>
+    </div>
+
+    <div style="padding:16px;">
+
+      <div style="margin-bottom:12px;">
+        <div style="font-size:12px; color:#888; margin-bottom:4px;">ROOM NAME</div>
+        <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">Bathroom 3F</div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px; color:#888; margin-bottom:8px;">DIMENSIONS (mm)</div>
+        <div style="display:flex; gap:8px;">
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Width</div>
+            <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">2000</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Depth</div>
+            <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">1500</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Height</div>
+            <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">2400</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+          <span style="font-size:12px; color:#888;">SURFACES</span>
+          <span style="width:18px; height:18px; background:#60a5fa; color:#fff; border-radius:50%; font-size:11px; display:flex; align-items:center; justify-content:center; font-weight:bold;">!</span>
+          <span style="font-size:10px; color:#60a5fa;">Tap for help</span>
+        </div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Front wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Back wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Left wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Right wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Floor ✓</span>
+        </div>
+      </div>
+
+      <!-- Mini top-down preview -->
+      <div style="background:#fff; border:1px solid #ddd; border-radius:8px; padding:12px; text-align:center;">
+        <div style="font-size:11px; color:#888; margin-bottom:8px;">ROOM LAYOUT</div>
+
+        <div style="display:inline-block; position:relative; width:140px; height:105px; border:2px solid #333; background:#f8f6f0;">
+
+          <!-- Person icon in center facing front -->
+          <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);">
+            <div style="width:14px; height:14px; background:#2563eb; border-radius:50%; position:relative;">
+              <!-- Direction arrow pointing up (front) -->
+              <div style="position:absolute; top:-18px; left:50%; transform:translateX(-50%); width:0; height:0; border-left:5px solid transparent; border-right:5px solid transparent; border-bottom:8px solid #2563eb;"></div>
+            </div>
+          </div>
+
+          <!-- Walls -->
+          <div style="position:absolute; top:0; left:10%; right:10%; text-align:center; font-size:9px; color:#888;">Front</div>
+          <div style="position:absolute; bottom:0; left:10%; right:10%; text-align:center; font-size:9px; color:#888;">Back</div>
+          <div style="position:absolute; left:0; top:50%; transform:translateY(-50%); font-size:9px; color:#888;">L</div>
+          <div style="position:absolute; right:0; top:50%; transform:translateY(-50%); font-size:9px; color:#888;">R</div>
+
+          <!-- Floor -->
+          <div style="position:absolute; inset:0; border-top:1px dashed #aaa;"></div>
+        </div>
+      </div>
+
+      <div style="background:#2563eb; color:#fff; padding:12px; border-radius:8px; text-align:center; font-size:14px; margin-top:12px;">
+        Create Room
+      </div>
+
+    </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Help popup — person in room perspective -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Tap ! → Help overlay</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:15px; font-weight:bold;">New Room</span>
+    </div>
+
+    <!-- Dark overlay -->
+    <div style="position:relative; background:rgba(0,0,0,0.05); min-height:380px; display:flex; align-items:center; justify-content:center;">
+
+      <!-- Help card -->
+      <div style="background:#fff; border-radius:12px; box-shadow:0 4px 20px rgba(0,0,0,0.15); width:90%; padding:20px; text-align:center;">
+
+        <div style="font-size:14px; font-weight:bold; margin-bottom:4px;">Where are you standing?</div>
+        <div style="font-size:11px; color:#888; margin-bottom:16px;">Imagine you're at the doorway looking in</div>
+
+        <!-- Room perspective diagram -->
+        <div style="position:relative; width:200px; height:160px; margin:0 auto 16px; background:#f0ede0; border:2px solid #999; perspective:400px; overflow:hidden;">
+
+          <!-- 3D-ish room interior -->
+          <div style="position:absolute; inset:0; background:linear-gradient(to bottom, #e8e0d0, #f5f0e8);">
+            <!-- Floor -->
+            <div style="position:absolute; bottom:0; left:0; right:0; height:55%; background:linear-gradient(to bottom, #ddd0b8, #c8b898);"></div>
+            <!-- Floor grid lines for depth -->
+            <div style="position:absolute; bottom:0; left:20%; right:20%; border-top:1px solid #bbb; height:10%;"></div>
+            <div style="position:absolute; bottom:0; left:15%; right:15%; border-top:1px solid #bbb; height:25%;"></div>
+            <div style="position:absolute; bottom:0; left:10%; right:10%; border-top:1px solid #bbb; height:42%;"></div>
+          </div>
+
+          <!-- Back wall (facing us) -->
+          <div style="position:absolute; top:0; left:20%; right:20%; bottom:45%; background:#f0e8d8; border:1px solid #999;">
+            <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#888; font-weight:bold;">Front Wall</span>
+          </div>
+
+          <!-- Left wall -->
+          <div style="position:absolute; top:0; left:0; right:80%; bottom:45%; background:#ede4d0; border:1px solid #999;">
+            <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-90deg); font-size:8px; color:#888; white-space:nowrap;">Left</span>
+          </div>
+
+          <!-- Right wall -->
+          <div style="position:absolute; top:0; left:80%; right:0; bottom:45%; background:#ede4d0; border:1px solid #999;">
+            <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); font-size:8px; color:#888; white-space:nowrap;">Right</span>
+          </div>
+
+          <!-- Person icon at doorway -->
+          <div style="position:absolute; bottom:8px; left:50%; transform:translateX(-50%);">
+            <div style="width:12px; height:12px; background:#2563eb; border-radius:50%; margin:0 auto;"></div>
+            <div style="width:16px; height:10px; background:#2563eb; border-radius:4px 4px 0 0;"></div>
+            <div style="font-size:8px; color:#2563eb; margin-top:2px;">You</div>
+          </div>
+
+          <!-- Floor label -->
+          <div style="position:absolute; bottom:12px; right:18px; font-size:9px; color:#888;">Floor ↙</div>
+
+          <!-- Doorway indicator -->
+          <div style="position:absolute; bottom:0; left:40%; right:40%; height:4px; background:#999;"></div>
+
+        </div>
+
+        <div style="font-size:11px; color:#888; line-height:1.5;">
+          <strong>Front wall</strong> — the wall you're facing<br/>
+          <strong>Back wall</strong> — the wall behind you<br/>
+          <strong>Left wall</strong> — wall on your left<br/>
+          <strong>Right wall</strong> — wall on your right<br/>
+          <strong>Floor</strong> — under your feet
+        </div>
+
+        <div style="margin-top:16px; background:#e8e8e8; padding:10px; border-radius:6px; font-size:12px; color:#333;">
+          Got it
+        </div>
+
+      </div>
+
+    </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;">
+
+  <h3>Why This Works for Tradies</h3>
+  <div style="display:flex; gap:16px;">
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+      <h4 style="margin:0 0 8px;">No coordinates</h4>
+      <p style="font-size:13px; color:var(--text-secondary);">Front/back/left/right from the doorway perspective. Every tiler understands this intuitively — it's how they walk into a job.</p>
+    </div>
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+      <h4 style="margin:0 0 8px;">Help icon for first-timers</h4>
+      <p style="font-size:13px; color:var(--text-secondary);">The ! icon shows the perspective diagram once. After that, the tiler knows the convention. The mini top-down preview on the create screen serves as a quick reminder.</p>
+    </div>
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+      <h4 style="margin:0 0 8px;">Toggle off unused surfaces</h4>
+      <p style="font-size:13px; color:var(--text-secondary);">Not every room needs all 5 surfaces. Tap to deselect. The 3D room view will only show selected surfaces.</p>
+    </div>
+
+  </div>
+</div>

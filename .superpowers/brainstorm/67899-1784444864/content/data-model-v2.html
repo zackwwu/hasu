@@ -1,0 +1,73 @@
+<h2>Data Model</h2>
+<p class="subtitle">6 entities, linked through SurfaceTileGroup</p>
+
+<!-- Entity 1: Room -->
+<div style="background:var(--bg-secondary,#1e1e2e); border-left:4px solid #a78bfa; border-radius:8px; padding:16px 20px; margin-bottom:12px;">
+  <h3 style="margin:0 0 4px; color:#a78bfa; font-size:16px;">Room</h3>
+  <table style="width:100%; font-size:13px; border-collapse:collapse;">
+    <tr><td style="color:var(--text-secondary,#a0a0b0); padding:2px 0; width:120px;">id</td><td>unique identifier</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">name</td><td>e.g. "Bathroom 3F"</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">units</td><td><code>mm</code> or <code>in</code></td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">surfaces</td><td>list of walls and floors</td></tr>
+  </table>
+</div>
+
+<!-- Entity 2: Surface -->
+<div style="background:var(--bg-secondary,#1e1e2e); border-left:4px solid #60a5fa; border-radius:8px; padding:16px 20px; margin-bottom:12px;">
+  <h3 style="margin:0 0 4px; color:#60a5fa; font-size:16px;">Surface</h3>
+  <table style="width:100%; font-size:13px; border-collapse:collapse;">
+    <tr><td style="color:var(--text-secondary,#a0a0b0); padding:2px 0; width:120px;">type</td><td><code>wall</code> or <code>floor</code></td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">dimensions</td><td>width × height (in room units)</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">position</td><td>{x, y, z} + rotation — relative to room origin</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">grout</td><td>color: black | grey | white, width: float (default 3mm)</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">tileAssignments</td><td style="color:#34d399;">list of SurfaceTileGroup →</td></tr>
+  </table>
+</div>
+
+<!-- Entity 3: SurfaceTileGroup (join) -->
+<div style="background:var(--bg-secondary,#1e1e2e); border-left:4px solid #34d399; border-radius:8px; padding:16px 20px; margin-bottom:12px;">
+  <h3 style="margin:0 0 4px; color:#34d399; font-size:16px;">SurfaceTileGroup</h3>
+  <p style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0 0 8px;">Links a tile group to a surface region. One wall can have 2+ of these (e.g. field tile + border).</p>
+  <table style="width:100%; font-size:13px; border-collapse:collapse;">
+    <tr><td style="color:var(--text-secondary,#a0a0b0); padding:2px 0; width:120px;">tileGroupId</td><td style="color:#f59e0b;">→ TileGroup</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">region</td><td>{x, y, w, h} — which part of the surface this group occupies</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">pattern</td><td>grid | herringbone | brick | stacked</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">offset</td><td>{x, y} — manual fine-tune drag offset</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">locked</td><td>bool — sync movement with other surfaces</td></tr>
+  </table>
+</div>
+
+<!-- Entity 4: TileGroup -->
+<div style="background:var(--bg-secondary,#1e1e2e); border-left:4px solid #f59e0b; border-radius:8px; padding:16px 20px; margin-bottom:12px;">
+  <h3 style="margin:0 0 4px; color:#f59e0b; font-size:16px;">TileGroup</h3>
+  <table style="width:100%; font-size:13px; border-collapse:collapse;">
+    <tr><td style="color:var(--text-secondary,#a0a0b0); padding:2px 0; width:120px;">name</td><td>e.g. "White subway tile"</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">tileWidth, tileHeight</td><td>single tile dimensions</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">texturePath</td><td>file path to captured/imported texture image</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">source</td><td><code>captured</code> or <code>imported</code></td></tr>
+  </table>
+</div>
+
+<!-- Entity 5: LayoutResult -->
+<div style="background:var(--bg-secondary,#1e1e2e); border-left:4px solid #f87171; border-radius:8px; padding:16px 20px; margin-bottom:20px;">
+  <h3 style="margin:0 0 4px; color:#f87171; font-size:16px;">LayoutResult</h3>
+  <p style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0 0 8px;">Computed tile placements. Cached — only recomputed when params change.</p>
+  <table style="width:100%; font-size:13px; border-collapse:collapse;">
+    <tr><td style="color:var(--text-secondary,#a0a0b0); padding:2px 0; width:120px;">surfaceId</td><td>which surface</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">tiles</td><td>list of {x, y, w, h, isCut, cutEdge, tileGroupId}</td></tr>
+    <tr><td style="color:var(--text-secondary,#a0a0b0);">stale</td><td>bool — true if params changed since last compute</td></tr>
+  </table>
+</div>
+
+<h3 style="margin-top: 28px;">How They Connect</h3>
+
+<div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; font-family:monospace; font-size:14px; line-height:2;">
+  Room ──▶ Surface ──▶ <span style="color:#34d399;">SurfaceTileGroup</span> ◀── <span style="color:#f59e0b;">TileGroup</span>
+  <br/>
+  <span style="color:#a0a0b0; padding-left:20px;">one-to-many</span>
+  <span style="color:#a0a0b0; padding-left:140px;">many-to-many join</span>
+  <br/><br/>
+  <span style="color:#f87171;">LayoutResult</span> ←── computed from Surface dims + SurfaceTileGroup params + TileGroup sizes
+</div>
+
+</div>

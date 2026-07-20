@@ -1,0 +1,21 @@
+{"type":"server-started","port":50642,"host":"127.0.0.1","url_host":"localhost","url":"http://localhost:50642","screen_dir":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content","state_dir":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/state"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/home-screen.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/home-screen-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/room-editor.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/room-config.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/room-config-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/room-3d-ref.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/tile-library.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/tile-library-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/layout-tab.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/preview-tab.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/3d-rotate.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/3d-rotate-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/surface-detail.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/surface-detail-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/region-visual.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/region-visual-v2.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/camera-capture.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/cut-list.html"}
+{"type":"screen-added","file":"/Users/chenwu/orca/workspaces/hasu/spec-and-plan/.superpowers/brainstorm/70571-1784457294/content/cut-list-v2.html"}
+{"type":"server-stopped","reason":"idle timeout"}

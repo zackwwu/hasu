@@ -1,0 +1,94 @@
+<h2>Fine-Tuning: Lock Propagation Rules</h2>
+<p class="subtitle">How deltas apply to locked surfaces — depends on the axis</p>
+
+<h3>The Rule</h3>
+
+<div class="mockup" style="margin-bottom:24px;">
+  <div class="mockup-body" style="padding:20px;">
+
+  <table style="width:100%; font-size:14px; border-collapse:collapse;">
+    <tr style="background:var(--bg-secondary,#1e1e2e);">
+      <th style="text-align:left; padding:10px 14px;">Drag on selected wall</th>
+      <th style="text-align:left; padding:10px 14px;">Propagates to parallel locked walls</th>
+      <th style="text-align:left; padding:10px 14px;">Propagates to perpendicular locked walls</th>
+    </tr>
+    <tr>
+      <td style="padding:10px 14px; border-bottom:1px solid var(--border-color,#333);">
+        <strong>Horizontal</strong> (dx)<br/>
+        <span style="font-size:12px; color:var(--text-secondary);">shift tiles left/right along width</span>
+      </td>
+      <td style="padding:10px 14px; border-bottom:1px solid var(--border-color,#333);">
+        ✅ same dx<br/>
+        <span style="font-size:12px; color:var(--text-secondary);">same axis direction</span>
+      </td>
+      <td style="padding:10px 14px; border-bottom:1px solid var(--border-color,#333);">
+        ❌ no effect<br/>
+        <span style="font-size:12px; color:var(--text-secondary);">horizontal axes point in different 3D directions</span>
+      </td>
+    </tr>
+    <tr>
+      <td style="padding:10px 14px;">
+        <strong>Vertical</strong> (dy)<br/>
+        <span style="font-size:12px; color:var(--text-secondary);">shift tiles up/down along height</span>
+      </td>
+      <td style="padding:10px 14px;">
+        ✅ same dy
+      </td>
+      <td style="padding:10px 14px;">
+        ✅ same dy<br/>
+        <span style="font-size:12px; color:var(--text-secondary);">all walls share the same "up" in 3D space</span>
+      </td>
+    </tr>
+  </table>
+
+  </div>
+</div>
+
+<h3>Why This Matters in Practice</h3>
+
+<div style="display:flex; gap:16px; margin-top:12px;">
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+    <h4 style="margin:0 0 8px;">Use case: align horizontal grout lines across all walls</h4>
+    <ul style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0; padding-left:18px; line-height:1.8;">
+      <li>Lock all walls together</li>
+      <li>Drag one wall vertically → all walls shift vertically by the same dy</li>
+      <li>Grout lines stay at the same height around the room</li>
+      <li>This is a partial solve of the stretch goal</li>
+    </ul>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+    <h4 style="margin:0 0 8px;">Use case: keep opposite walls symmetric</h4>
+    <ul style="font-size:13px; color:var(--text-secondary,#a0a0b0); margin:0; padding-left:18px; line-height:1.8;">
+      <li>Lock front and back walls (parallel)</li>
+      <li>Drag one horizontally → both shift horizontally together</li>
+      <li>Vertical drag also propagates (shared up)</li>
+      <li>Result: symmetrical layout on both sides</li>
+    </ul>
+  </div>
+
+</div>
+
+<h3 style="margin-top:24px;">Floors</h3>
+
+<div class="mockup" style="margin-top:12px;">
+  <div class="mockup-body" style="padding:16px;">
+
+  <p style="font-size:13px; color:var(--text-secondary);">Floors have no shared axis with walls (floor surface is horizontal, wall surface is vertical). Locking between a wall and a floor has <strong>no effect</strong> for MVP. Each surface type (wall, floor) only locks within its own type.</p>
+
+  <table style="width:100%; font-size:13px; border-collapse:collapse; margin-top:12px;">
+    <tr style="background:var(--bg-secondary,#1e1e2e);">
+      <th style="text-align:left; padding:8px 12px;">Drag on floor</th>
+      <th style="text-align:left; padding:8px 12px;">Propagates to locked floor</th>
+    </tr>
+    <tr><td style="padding:8px 12px;">Horizontal (dx — width)</td><td style="padding:8px 12px;">✅ if same orientation</td></tr>
+    <tr><td style="padding:8px 12px;">Vertical (dy — depth)</td><td style="padding:8px 12px;">✅ if same orientation</td></tr>
+  </table>
+
+  </div>
+</div>
+
+<div style="margin-top:16px;">
+  <a href="http://localhost:58808" style="font-size:13px; color:var(--text-secondary);">← Previous: full editor UX mockup</a>
+</div>
