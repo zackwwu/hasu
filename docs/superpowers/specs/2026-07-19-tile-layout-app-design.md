@@ -2,7 +2,7 @@
 
 **Date:** 2026-07-19
 **Status:** Draft
-**Platform:** Flutter (cross-platform: iOS + Android)
+**Platform:** Kotlin Multiplatform — shared logic + native UI (SwiftUI on iOS, Jetpack Compose on Android)
 **Scope:** MVP — local-only, single-user
 
 ## Overview
@@ -33,42 +33,56 @@ A mobile app for professional tilers to design tile layouts on walls and floors,
 
 ## Architecture
 
-### Approach: Canvas-first custom rendering
+### Approach: KMP shared logic + native platform UI
 
-All rendering via Flutter's `CustomPainter` on Canvas. No widget-per-tile (doesn't scale). No 3D engine (isometric is a 2D matrix transform).
+All business logic lives in a shared Kotlin module: models, storage (SQLDelight), layout engine, cut list generator. No shared UI — each platform gets native UI: SwiftUI (iOS) with Canvas for rendering, Jetpack Compose (Android) with Canvas for rendering. The shared module exposes Kotlin StateFlows that platform UIs observe.
 
 ### Module Diagram
 
 ```
-Room Modeler ──▶ Layout Engine ──▶ Render Engine ──▶ Preview / Export
-     │                  ▲                    │              │
-     │                  │                    │              ▼
-     │   Tile Library ──┘                    │        Cut List Generator
-     │        ▲                             │
-     │        │                             │
-     │   Texture Capture                    │
-     │                                      │
-     └──────────────────────────────────────┘
-                  Local Storage (SQLite)
+┌─────────────────────────────────────────────┐
+│              SHARED KOTLIN MODULE            │
+│                                             │
+│  Room Modeler ──▶ Layout Engine ──▶ Render   │
+│       │                  ▲           Engine  │
+│       │                  │            │      │
+│       │   Tile Library ──┘            │      │
+│       │        ▲                      │      │
+│       │        │                      ▼      │
+│       │   Texture Capture         Cut List   │
+│       │                           Generator  │
+│       │                                      │
+│       └───────────────┐                      │
+│                       ▼                      │
+│               SQLDelight (SQLite)            │
+└─────────────────────────────────────────────┘
+         │                      │
+         ▼                      ▼
+    SwiftUI (iOS)     Jetpack Compose (Android)
+    - Canvas 2D/3D    - Canvas 2D/3D
+    - Camera capture   - Camera capture
+    - Image picker     - Image picker
 ```
 
-### 6 Core Modules
+### 6 Core Modules (all in shared Kotlin)
 
 | Module | Responsibility |
 |--------|---------------|
 | **Room Modeler** | Define projects, rooms, surfaces. Auto-position walls/floors from room dimensions. Assign tile groups to surface regions. |
-| **Tile Library** | Project-level. Define tile groups (name, tileWidth, tileHeight, texture). Capture/import textures. Reusable across rooms. |
-| **Texture Capture** | Camera → edge detection → perspective correction → save texture to Tile Library. |
-| **Layout Engine** | Pure Dart: compute optimal tile placement per surface region. Symmetry, sliver-cut elimination, pattern variants. |
-| **Render Engine** | CustomPainter: draw tiles with textures, grout lines, dimension annotations, cut markings. 2D elevation + 3D isometric. Export to high-res PNG. |
-| **Cut List Generator** | Walk all LayoutResults, group identical cuts (tile group + dimensions + cut shape), list per-surface locations and quantities. |
+| **Tile Library** | Project-level. Define tile groups (name, tileWidth, tileHeight, texture). Texture file management. Reusable across rooms. |
+| **Texture Capture** | Platform-specific camera/image-picker. Shared: edge detection + perspective correction (pure Kotlin). |
+| **Layout Engine** | Pure Kotlin: compute optimal tile placement per surface region. Symmetry, sliver-cut elimination, pattern variants. |
+| **Render Engine** | Pure Kotlin: output tile positions + metadata. Platform UIs translate to Canvas draw calls. Isometric transform is shared math. |
+| **Cut List Generator** | Walk all LayoutResults, group identical cuts, list per-surface locations and quantities. |
 
 ### Key Architectural Rules
 
-- Layout Engine outputs data (`List<PlacedTile>`), Render Engine paints pixels. No coupling.
-- 2D and 3D rendering share the same `drawSurface()` code. Isometric just wraps it in `canvas.transform(matrix)`.
-- Textures skew correctly under the isometric transform automatically (Canvas handles it).
+- Shared module is pure Kotlin — no Android or iOS dependencies. Platform UIs consume it via StateFlow observables.
+- Layout Engine outputs data (`List<PlacedTile>`), platform Canvas code paints pixels. No coupling.
+- 2D and 3D rendering share the same projection math in shared code. Platform UIs each implement Canvas drawing using those coordinates.
+- Isometric projection math is in shared Kotlin; the Canvas transform is platform-specific (SwiftUI Canvas, Compose Canvas).
 - Cut List Generator is read-only — it walks LayoutResults, no modification.
+- Rendering pipeline: shared engine computes tile rects + metadata → platform observes StateFlow → platform Canvas draws.
 
 ---
 
@@ -289,7 +303,7 @@ Each `SurfaceTileGroup` defines a rectangular region. The Layout Engine runs ind
 
 ### 2D Elevation View
 
-Paint order (back to front):
+Paint order (back to front), same on both platforms:
 
 1. Surface background fill
 2. Per PlacedTile: clipped texture image at tile rect
@@ -298,16 +312,20 @@ Paint order (back to front):
 5. Surface dimension arrows + mm labels on outer edges
 6. Legend: grout width
 
+Shared code computes all tile rects, cut annotations, and dimension labels as data. Platform Canvas code draws them. No layout logic in the UI layer.
+
 **Cut annotations:** Horizontal arrow ↔ across the cut tile labeled with its width (e.g., "91mm") for width cuts. Vertical arrow ↕ for height cuts. Both arrows for corner cuts.
 
 ### 3D Isometric View
 
-No 3D engine. Isometric projection via 2D matrix:
+No 3D engine. Isometric projection computed in shared Kotlin math:
 
 ```
 ix = (sx - sy) * cos30° + ox
 iy = (sx + sy) * sin30° - sz + oy
 ```
+
+Platforms apply the projection via Canvas transforms: `CGAffineTransform` on iOS, `graphicsLayer` or matrix transform on Android.
 
 **Rotation:** ◀ and ▶ arrow buttons overlaid on the 3D view. Each tap rotates the room by 90°, showing a different wall pair:
 
@@ -320,19 +338,15 @@ iy = (sx + sy) * sin30° - sz + oy
 
 Plus a "Top-Down" toggle for the floor perspective.
 
-**Tap to select:** Tap a surface in the 3D view to select it. An info card appears with an "Edit Layout" button that jumps to the Layout tab with that surface pre-selected. The 3D view serves as the primary navigation hub between surfaces.
-
-**Hit testing:** Surfaces can overlap in isometric projection. Resolve taps using reverse painter's order (front-most surface wins). For each visible surface, project its 4 corners to screen coordinates and test point-in-polygon. First match in front-to-back order is the selected surface. If the tap lands in the floor-only region (no wall overlap), select the floor directly.
+**Tap to select:** Tap a surface in the 3D view to select it. Hit testing: shared code projects surface corners to screen coords; platform UI tests point-in-polygon in front-to-back order. An info card appears with an "Edit Layout" button.
 
 **Draw order** (painter's algorithm, back-to-front): floor → back walls → side walls → front wall. Ordering recalculates when the view angle changes.
-
-The same `drawSurface()` code runs through `canvas.transform(matrix)` — textures skew correctly, grout lines stay aligned.
 
 No dimension labels on 3D view. Clean preview for client approval.
 
 ### Export
 
-- **2D:** Render to `ui.Image` via `PictureRecorder`. Save as PNG at 150–300 DPI. One image per surface. Full dimension labels. For tilers/crew.
+- **2D:** Platform Canvas renders to platform image format (UIImage / Bitmap). Save as PNG at 150–300 DPI. One image per surface.
 - **3D:** Single isometric room render as PNG. No labels. For client approval.
 - **Cut List:** Share as text or screenshot. Grouped by tile group, with per-surface location breakdowns.
 
@@ -527,12 +541,15 @@ Home (Project List)
 
 | Concern | Choice | Rationale |
 |---------|--------|-----------|
-| Framework | Flutter | Cross-platform, strong CustomPainter for rendering |
-| State management | Riverpod or Provider | Standard Flutter patterns, sufficient for local-only |
-| Local DB | sqflite (SQLite) | Mature, well-supported, no network needed |
-| Image storage | App documents directory | Files referenced by path in SQLite |
-| Camera | `camera` plugin + edge_detection | Standard Flutter camera stack |
-| 3D (isometric) | Custom math + Canvas transform | No 3D engine dependency |
+| Shared logic | Kotlin Multiplatform (KMP) | Single codebase for all business logic, models, engine |
+| iOS UI | SwiftUI + Canvas | Native iOS look and feel, Canvas API for tile rendering |
+| Android UI | Jetpack Compose + Canvas | Native Android look and feel, Canvas API for tile rendering |
+| State exposure | kotlinx-coroutines StateFlow | Shared module emits state; both platforms observe natively |
+| Local DB | SQLDelight | KMP-native SQLite wrapper, generates type-safe Kotlin from SQL |
+| Image storage | Platform document directories | File paths stored in DB; images on disk |
+| Camera | Platform-specific (AVFoundation / CameraX) | Native camera APIs called from platform UI |
+| Image processing | Shared Kotlin (custom edge-detect + homography) | Pure Kotlin math, no platform dependency |
+| 3D (isometric) | Shared math + platform Canvas transform | Projection computed in shared code; platform draws |
 
 ## Out of Scope (MVP)
 
