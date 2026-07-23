@@ -458,7 +458,7 @@ At the top: total full tiles, total cut tiles, and count of unique cut sizes.
 
 ### Technical
 
-Uses Flutter's `camera` plugin + edge detection (e.g., `edge_detection` package or custom Canny via OpenCV FFI). Perspective correction uses a 4-point homography transform. Captured images stored in the app's local document directory. SQLite stores the file path.
+Camera is platform-specific: AVFoundation (iOS) and CameraX (Android). Edge detection and perspective correction (4-point homography transform) are pure Kotlin in the shared module — no platform dependency. Captured images stored in the app's local document directory. SQLDelight stores the file path.
 
 ---
 
@@ -561,5 +561,5 @@ Home (Project List)
 - Swipe-to-orbit in 3D view (discrete 90° buttons only)
 - Complex tile patterns beyond grid/brick/stacked/herringbone
 - Notch cuts for obstacles (stretch goal)
-- Undo/redo history
+- Full undo/redo history (single-level drag undo IS in scope; see Fine-Tuning §Undo)
 - Price estimation / materials calculation
