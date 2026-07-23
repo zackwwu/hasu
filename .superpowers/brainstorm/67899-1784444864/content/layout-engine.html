@@ -1,0 +1,125 @@
+<h2>Layout Engine Algorithm</h2>
+<p class="subtitle">How tiles get placed — symmetry, balance, and no sliver cuts</p>
+
+<h3>The Core Problem</h3>
+
+<div class="mockup" style="margin-bottom:24px;">
+  <div class="mockup-header">Surface: 2000mm × 1200mm | Tile: 300mm × 200mm | Grout: 3mm</div>
+  <div class="mockup-body" style="padding:20px; font-family:monospace; font-size:13px;">
+
+  <div style="margin-bottom:20px;">
+    <strong style="color:#f87171;">❌ Naive: start from left edge</strong><br/>
+    <pre style="margin:4px 0; background:#1e1e2e; padding:8px; border-radius:4px;">
+  Full tiles: 2000 ÷ 303 = 6 tiles (1818mm)
+  Remainder: 182mm cut on right → 182/300 = 61% tile ← okay
+  But: asymmetric. No cut on left, big cut on right.</pre>
+  </div>
+
+  <div style="margin-bottom:20px;">
+    <strong style="color:#34d399;">✅ Good: center the layout</strong><br/>
+    <pre style="margin:4px 0; background:#1e1e2e; padding:8px; border-radius:4px;">
+  Shift start by: 182 ÷ 2 = 91mm
+  Left cut: 91mm (30% tile)  |  Right cut: 91mm (30% tile)
+  Symmetric + no slivers.</pre>
+  </div>
+
+  <div>
+    <strong style="color:#facc15;">⚠️ Sliver detected</strong><br/>
+    <pre style="margin:4px 0; background:#1e1e2e; padding:8px; border-radius:4px;">
+  If remainder were 60mm → 60/300 = 20% tile → TOO THIN
+  Algorithm falls back: remove one full tile, redistribute.
+  2000 - (5 × 303) = 485mm → 242mm each side → 81% tile each → good.</pre>
+  </div>
+
+  </div>
+</div>
+
+<h3>The Algorithm (per direction, per tile group region)</h3>
+
+<div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; font-size:14px; line-height:1.8;">
+
+<pre style="background:#1e1e2e; padding:12px; border-radius:4px; font-size:13px;">
+
+function computeLayout(regionW, regionH, tileW, tileH, groutW, groutH):
+  unitW = tileW + groutW
+  unitH = tileH + groutH
+
+  // Step 1: Fit tiles
+  fullCols = floor(regionW / unitW)
+  fullRows = floor(regionH / unitH)
+  remainderW = regionW - (fullCols * unitW)
+  remainderH = regionH - (fullRows * unitH)
+
+  // Step 2: Check for slivers (cut < 30% of tile)
+  minCutRatio = 0.30
+  if remainderW < tileW * minCutRatio AND remainderW > 0:
+    fullCols -= 1    // drop one tile, redistribute
+    remainderW = regionW - (fullCols * unitW)
+  // same for height
+
+  // Step 3: Center for symmetry
+  offsetX = remainderW / 2
+  offsetY = remainderH / 2
+
+  // Step 4: Place tiles in grid
+  tiles = []
+  for row in 0..fullRows:
+    for col in 0..fullCols:
+      x = offsetX + col * unitW
+      y = offsetY + row * unitH
+      w = min(tileW, regionW - x)  // clamp at edge
+      h = min(tileH, regionH - y)
+      isCut = (w < tileW) or (h < tileH)
+      tiles.add({x, y, w, h, isCut})
+
+  return {tiles, offsetX, offsetY}
+</pre>
+
+</div>
+
+<h3 style="margin-top:24px;">Pattern Variants</h3>
+
+<div style="display:flex; gap:16px; margin-top:12px;">
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; text-align:center;">
+    <div style="font-size:40px; padding:12px;">▦▦▦▦▦<br/>▦▦▦▦▦<br/>▦▦▦▦▦</div>
+    <h4>Grid</h4>
+    <p style="font-size:13px; color:var(--text-secondary,#a0a0b0);">Columns × rows. Default pattern.<br/>Symmetry in both axes.</p>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; text-align:center;">
+    <div style="font-size:40px; padding:12px;">▦▦▦▦▦<br/>&nbsp;▦▦▦▦▦<br/>▦▦▦▦▦</div>
+    <h4>Brick</h4>
+    <p style="font-size:13px; color:var(--text-secondary,#a0a0b0);">50% offset every other row.<br/>Symmetry check on row pairs only.</p>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; text-align:center;">
+    <div style="font-size:40px; padding:12px;">▦▦▦▦▦<br/>▦▦▦▦▦<br/>▦▦▦▦▦</div>
+    <h4>Stacked</h4>
+    <p style="font-size:13px; color:var(--text-secondary,#a0a0b0);">Vertical-only grout alignment.<br/>No horizontal offset between rows.</p>
+  </div>
+
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; text-align:center;">
+    <div style="font-size:40px; padding:12px;">▤▤▤▤<br/>&nbsp;▤▤▤▤<br/>▤▤▤▤</div>
+    <h4>Herringbone</h4>
+    <p style="font-size:13px; color:var(--text-secondary,#a0a0b0);">Tiles at 45°. Computed as rotated bounding boxes in a staggered grid.</p>
+  </div>
+
+</div>
+
+<h3 style="margin-top:24px;">Multi-Group Surfaces</h3>
+
+<div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; font-size:14px; line-height:1.8;">
+
+<p>Each <span style="color:#34d399;">SurfaceTileGroup</span> defines a rectangular region on the surface. The layout engine runs independently per region:</p>
+
+<pre style="background:#1e1e2e; padding:12px; border-radius:4px; font-size:13px;">
+  Surface (2000 × 1200)
+  ├── Region A: {x:0, y:0, w:2000, h:150} → border tile, brick pattern
+  ├── Region B: {x:0, y:150, w:2000, h:900} → subway tile, grid pattern
+  └── Region C: {x:0, y:1050, w:2000, h:150} → border tile, brick pattern
+</pre>
+
+<p style="color:var(--text-secondary,#a0a0b0); font-size:13px;">Regions don't overlap. Layout engine treats each independently, then the Render Engine stitches them together on the Canvas. Grout alignment across regions (stretch goal) would require a second pass that nudges region offsets to align grout lines.</p>
+
+</div>

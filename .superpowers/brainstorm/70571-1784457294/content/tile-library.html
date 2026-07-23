@@ -1,0 +1,122 @@
+<h2>Tile Library Tab</h2>
+<p class="subtitle">Manage tile groups — capture textures, set sizes, assign to surfaces</p>
+
+<div class="mockup" style="max-width:400px; margin:0 auto;">
+  <div class="mockup-header">Room Editor — Tile Library tab</div>
+  <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+  <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ccc;">
+    <span style="font-size:16px;">‹</span>
+    <div style="flex:1;">
+      <div style="font-size:15px; font-weight:bold;">Bathroom 3F</div>
+      <div style="font-size:11px; color:#888;">Smith Residence</div>
+    </div>
+  </div>
+
+  <!-- Tile group cards -->
+  <div style="padding:8px 12px;">
+
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:10px;">
+      <div style="display:flex; gap:12px;">
+        <!-- Tile texture thumbnail -->
+        <div style="width:72px; height:72px; background:linear-gradient(135deg, #e8dcc8 0%, #d4c8a8 30%, #c8b898 60%, #d4c8a8 100%); border-radius:8px; flex-shrink:0; border:1px solid #ddd; position:relative;">
+          <!-- Grid lines on thumbnail -->
+          <div style="position:absolute; inset:4px; border:1px solid rgba(0,0,0,0.1);"></div>
+          <div style="position:absolute; top:4px; left:4px; right:4px; bottom:4px;">
+            <div style="position:absolute; left:50%; top:0; bottom:0; border-left:0.5px solid rgba(0,0,0,0.1);"></div>
+            <div style="position:absolute; top:50%; left:0; right:0; border-top:0.5px solid rgba(0,0,0,0.1);"></div>
+          </div>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:bold; font-size:14px;">White subway tile</div>
+          <div style="color:#888; font-size:12px; margin-top:2px;">300 × 200mm</div>
+          <div style="color:#aaa; font-size:11px; margin-top:2px;">Captured · 1 wall uses this</div>
+
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">✏️ Edit</span>
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">📋 Assign</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:10px;">
+      <div style="display:flex; gap:12px;">
+        <div style="width:72px; height:72px; background:linear-gradient(135deg, #8899aa 0%, #7788aa 100%); border-radius:8px; flex-shrink:0; border:1px solid #ddd;"></div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:bold; font-size:14px;">Grey stone floor</div>
+          <div style="color:#888; font-size:12px; margin-top:2px;">600 × 600mm</div>
+          <div style="color:#aaa; font-size:11px; margin-top:2px;">Imported · 1 floor uses this</div>
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">✏️ Edit</span>
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">📋 Assign</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:10px;">
+      <div style="display:flex; gap:12px;">
+        <div style="width:72px; height:72px; background:linear-gradient(135deg, #c8d8e8 0%, #b8c8d8 100%); border-radius:8px; flex-shrink:0; border:1px solid #ddd;"></div>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:bold; font-size:14px;">Blue mosaic border</div>
+          <div style="color:#888; font-size:12px; margin-top:2px;">100 × 100mm</div>
+          <div style="color:#aaa; font-size:11px; margin-top:2px;">Imported · 1 wall uses this</div>
+          <div style="display:flex; gap:6px; margin-top:8px;">
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">✏️ Edit</span>
+            <span style="background:#e8e8e8; padding:3px 8px; border-radius:10px; font-size:10px;">📋 Assign</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Add tile group button -->
+  <div style="padding:0 12px 12px;">
+    <div style="border:1px dashed #2563eb; border-radius:8px; padding:14px; text-align:center; color:#2563eb; font-size:14px;">
+      + Add Tile Group
+    </div>
+  </div>
+
+  <!-- Bottom tab bar -->
+  <div style="display:flex; border-top:1px solid #ccc; background:#e0e0e0;">
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Surfaces</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; border-bottom:3px solid #2563eb; color:#2563eb; font-weight:bold;">Tile Library</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Layout</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Preview</div>
+  </div>
+
+  </div>
+</div>
+
+<div style="margin-top:24px; max-width:400px; margin-left:auto; margin-right:auto;">
+
+  <h3>Add Tile Group Flow</h3>
+  <div style="display:flex; gap:12px; margin-top:12px;">
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px; margin-bottom:6px;">📸</div>
+      <div style="font-weight:bold; font-size:13px;">Capture</div>
+      <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Open camera<br/>Scan tile surface<br/>Auto-crop to square</div>
+    </div>
+
+    <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:14px; text-align:center;">
+      <div style="font-size:28px; margin-bottom:6px;">🖼️</div>
+      <div style="font-weight:bold; font-size:13px;">Import</div>
+      <div style="font-size:11px; color:var(--text-secondary); margin-top:4px;">Pick from gallery<br/>Manually crop<br/>Or use as-is</div>
+    </div>
+
+  </div>
+
+  <h3 style="margin-top:16px;">Tile Group Edit (tap "Edit")</h3>
+  <div style="background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:16px; font-size:13px; line-height:2;">
+    <div>Name: <span style="color:var(--text-secondary);">White subway tile</span></div>
+    <div>Tile width: <span style="color:var(--text-secondary);">300 mm</span></div>
+    <div>Tile height: <span style="color:var(--text-secondary);">200 mm</span></div>
+    <div>Texture: <span style="color:var(--text-secondary);">[■ thumbnail] Tap to recapture</span></div>
+    <div style="margin-top:8px; background:#dc2626; color:#fff; padding:8px; border-radius:6px; text-align:center;">Delete Tile Group</div>
+  </div>
+
+</div>

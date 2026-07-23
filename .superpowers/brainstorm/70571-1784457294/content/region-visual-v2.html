@@ -1,0 +1,137 @@
+<h2>Region Presets — Including Center Strips</h2>
+<p class="subtitle">All presets on one surface, so tilers can see every option</p>
+
+<div style="display:flex; gap:24px; margin-top:16px; align-items:start;">
+
+  <!-- Wall visualization with ALL regions -->
+  <div style="flex:1; background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:24px; text-align:center;">
+
+    <h3 style="margin:0 0 4px;">Wall Surface 2000 × 1200mm</h3>
+    <p style="font-size:11px; color:#888; margin:0 0 16px;">Showing common combinations, not all at once</p>
+
+    <!-- Example 1: Horizontal center band -->
+    <div style="margin-bottom:24px;">
+      <div style="font-size:11px; font-weight:bold; margin-bottom:6px; color:var(--text-secondary);">
+        Horizontal center band — decorative strip across the middle
+      </div>
+      <div style="display:inline-block; position:relative; width:240px; height:144px; border:2px solid #333; background:#f8f6f0;">
+
+        <!-- Top field -->
+        <div style="position:absolute; top:0; left:0; right:0; height:52px; background:rgba(232,220,200,0.8);">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#888;">Field tile (grid)</span>
+        </div>
+
+        <!-- Center band -->
+        <div style="position:absolute; top:52px; left:0; right:0; height:40px; background:rgba(200,216,232,0.7); border-top:2px solid #60a5fa; border-bottom:2px solid #60a5fa;">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#2563eb; font-weight:bold;">Center band</span>
+        </div>
+
+        <!-- Bottom field -->
+        <div style="position:absolute; bottom:0; left:0; right:0; height:52px; background:rgba(232,220,200,0.8);">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); font-size:9px; color:#888;">Field tile (grid)</span>
+        </div>
+
+        <!-- Annotation -->
+        <div style="position:absolute; right:-5px; top:52px; bottom:52px; width:2px; background:#60a5fa;">
+          <span style="position:absolute; right:-30px; top:50%; transform:translateY(-50%); font-size:9px; color:#2563eb; white-space:nowrap;">200mm band →</span>
+        </div>
+      </div>
+      <div style="font-size:10px; color:#888; margin-top:4px;">
+        3 tile groups: top field + center band + bottom field
+      </div>
+    </div>
+
+    <!-- Example 2: Vertical center band -->
+    <div>
+      <div style="font-size:11px; font-weight:bold; margin-bottom:6px; color:var(--text-secondary);">
+        Vertical center band — feature strip running floor to ceiling
+      </div>
+      <div style="display:inline-block; position:relative; width:240px; height:144px; border:2px solid #333; background:#f8f6f0;">
+
+        <!-- Left field -->
+        <div style="position:absolute; top:0; left:0; bottom:0; width:90px; background:rgba(232,220,200,0.8);">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-90deg); font-size:8px; color:#888; white-space:nowrap;">Field tile</span>
+        </div>
+
+        <!-- Center band -->
+        <div style="position:absolute; top:0; left:90px; bottom:0; width:60px; background:rgba(200,216,232,0.7); border-left:2px solid #60a5fa; border-right:2px solid #60a5fa;">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); font-size:8px; color:#2563eb; font-weight:bold; white-space:nowrap;">Center</span>
+        </div>
+
+        <!-- Right field -->
+        <div style="position:absolute; top:0; right:0; bottom:0; width:90px; background:rgba(232,220,200,0.8);">
+          <span style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(90deg); font-size:8px; color:#888; white-space:nowrap;">Field</span>
+        </div>
+
+        <!-- Annotation -->
+        <div style="position:absolute; bottom:-5px; left:90px; right:90px; height:2px; background:#60a5fa;">
+          <span style="position:absolute; top:6px; left:50%; transform:translateX(-50%); font-size:9px; color:#2563eb; white-space:nowrap;">← 400mm band →</span>
+        </div>
+      </div>
+      <div style="font-size:10px; color:#888; margin-top:4px;">
+        3 tile groups: left field + center band + right field
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Preset table -->
+  <div style="width:340px;">
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px;">
+      <h3 style="margin:0 0 12px;">All Presets</h3>
+
+      <table style="width:100%; font-size:11px; border-collapse:collapse; line-height:2;">
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#2563eb; font-weight:bold;">Full surface</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{0, 0, W, H}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#2563eb;">Top strip</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{0, 0, W, s}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#2563eb;">Bottom strip</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{0, H-s, W, s}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#60a5fa;">Left strip</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{0, 0, s, H}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#60a5fa;">Right strip</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{W-s, 0, s, H}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#34d399; font-weight:bold;">H-center band</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{0, (H-s)/2, W, s}</td>
+        </tr>
+        <tr style="border-bottom:1px solid var(--border-color,#333);">
+          <td style="padding:3px 6px; color:#34d399;">V-center band</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{(W-s)/2, 0, s, H}</td>
+        </tr>
+        <tr>
+          <td style="padding:3px 6px; color:#f87171;">Custom</td>
+          <td style="padding:3px 6px; color:#888; font-family:monospace;">{x, y, w, h}</td>
+        </tr>
+      </table>
+
+      <p style="font-size:10px; color:var(--text-secondary); margin-top:12px;">
+        W = surface width, H = surface height, s = strip size (mm)<br/>
+        Enter strip size once — app auto-calculates the rect.
+      </p>
+    </div>
+
+    <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:16px; margin-top:12px;">
+      <h4 style="margin:0 0 8px;">Why Use Presets</h4>
+      <ul style="font-size:12px; color:var(--text-secondary); line-height:1.6; margin:0; padding-left:16px;">
+        <li>Tiler only enters one number: the strip width/height</li>
+        <li>App auto-calculates position to center it or place at edge</li>
+        <li>Custom mode still available for any other rect</li>
+        <li>Regions never overlap — app validates on save</li>
+      </ul>
+    </div>
+
+  </div>
+
+</div>

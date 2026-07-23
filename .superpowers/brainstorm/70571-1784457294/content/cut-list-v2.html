@@ -1,0 +1,204 @@
+<h2>Cut List — Grouped by Cut, Showing Where Each Goes</h2>
+<p class="subtitle">Same cut dimension across multiple surfaces → one row, multiple locations</p>
+
+<div class="mockup" style="max-width:420px; margin:0 auto;">
+  <div class="mockup-header">Cut List tab</div>
+  <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+  <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:4px; border-bottom:1px solid #ccc;">
+    <span style="font-size:16px;">‹</span>
+    <span style="font-size:14px; font-weight:bold;">Bathroom 3F — Cut List</span>
+    <span style="margin-left:auto; font-size:11px; background:#e8e8e8; padding:4px 8px; border-radius:4px;">⬆ Share</span>
+  </div>
+
+  <!-- Summary bar -->
+  <div style="padding:8px 12px; background:#fef3c7; border-bottom:1px solid #f59e0b; display:flex; gap:16px; font-size:11px;">
+    <span>🔲 <strong>102</strong> full</span>
+    <span>✂️ <strong>24</strong> cuts</span>
+    <span style="color:#888;">7 unique sizes</span>
+  </div>
+
+  <div style="padding:8px 12px;">
+
+    <!-- Cut 1: edge cut on multiple walls -->
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:8px;">
+
+      <div style="display:flex; gap:12px; align-items:start;">
+        <!-- Shape diagram -->
+        <div style="width:56px; height:38px; background:#fef0f0; border:2px solid #e44; border-radius:6px; flex-shrink:0; position:relative;">
+          <div style="position:absolute; right:0; top:0; bottom:0; width:3px; background:#e44; border-left:1px dashed #e44;"></div>
+          <span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:#e44; font-weight:bold;">91</span>
+          <span style="position:absolute; left:2px; top:50%; transform:translateY(-50%); font-size:8px; color:#888;">200</span>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:bold;">91 × 200mm</div>
+          <div style="font-size:11px; color:#888; margin-top:2px;">Right edge cut · White subway</div>
+
+          <!-- Where this cut goes -->
+          <div style="margin-top:8px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">APPLIED TO:</div>
+            <div style="display:flex; gap:6px; flex-wrap:wrap;">
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Front wall <strong style="color:#e44;">×5</strong>
+              </span>
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Left wall <strong style="color:#e44;">×5</strong>
+              </span>
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Right wall <strong style="color:#e44;">×5</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#e44; color:#fff; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold; flex-shrink:0;">×15</div>
+      </div>
+    </div>
+
+    <!-- Cut 2: same dimension, left edge -->
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:8px;">
+
+      <div style="display:flex; gap:12px; align-items:start;">
+        <div style="width:56px; height:38px; background:#fef0f0; border:2px solid #e44; border-radius:6px; flex-shrink:0; position:relative;">
+          <div style="position:absolute; left:0; top:0; bottom:0; width:3px; background:#e44; border-right:1px dashed #e44;"></div>
+          <span style="position:absolute; bottom:1px; left:3px; font-size:8px; color:#e44; font-weight:bold;">91</span>
+          <span style="position:absolute; right:2px; top:50%; transform:translateY(-50%); font-size:8px; color:#888;">200</span>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:bold;">91 × 200mm</div>
+          <div style="font-size:11px; color:#888; margin-top:2px;">Left edge cut · White subway</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">APPLIED TO:</div>
+            <div style="display:flex; gap:6px;">
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Front wall <strong style="color:#e44;">×5</strong>
+              </span>
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Left wall <strong style="color:#e44;">×5</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#e44; color:#fff; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold; flex-shrink:0;">×10</div>
+      </div>
+    </div>
+
+    <!-- Cut 3: corner cut (single surface only) -->
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:8px;">
+
+      <div style="display:flex; gap:12px; align-items:start;">
+        <div style="width:56px; height:38px; background:#fef0f0; border:2px solid #e44; border-radius:6px; flex-shrink:0; position:relative;">
+          <div style="position:absolute; right:0; top:0; bottom:0; width:3px; background:#e44; border-left:1px dashed #e44;"></div>
+          <div style="position:absolute; bottom:0; left:0; right:0; height:3px; background:#e44; border-top:1px dashed #e44;"></div>
+          <span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:#e44; font-weight:bold;">91</span>
+          <span style="position:absolute; top:1px; right:3px; font-size:8px; color:#e44; font-weight:bold;">50</span>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:bold;">91 × 50mm</div>
+          <div style="font-size:11px; color:#888; margin-top:2px;">Corner cut (right + bottom) · White subway</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">APPLIED TO:</div>
+            <div style="display:flex; gap:6px;">
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Front wall <strong style="color:#e44;">×2</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#e44; color:#fff; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold; flex-shrink:0;">×2</div>
+      </div>
+    </div>
+
+    <!-- Cut 4: floor cut -->
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:8px;">
+
+      <div style="display:flex; gap:12px; align-items:start;">
+        <div style="width:56px; height:38px; background:#fef0f0; border:2px solid #e44; border-radius:6px; flex-shrink:0; position:relative;">
+          <div style="position:absolute; bottom:0; left:0; right:0; height:3px; background:#e44; border-top:1px dashed #e44;"></div>
+          <span style="position:absolute; top:1px; right:3px; font-size:8px; color:#e44; font-weight:bold;">200</span>
+          <span style="position:absolute; left:2px; top:50%; transform:translateY(-50%); font-size:8px; color:#888;">600</span>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:bold;">600 × 200mm</div>
+          <div style="font-size:11px; color:#888; margin-top:2px;">Bottom edge cut · Grey stone</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">APPLIED TO:</div>
+            <div style="display:flex; gap:6px;">
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Floor <strong style="color:#e44;">×4</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#e44; color:#fff; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold; flex-shrink:0;">×4</div>
+      </div>
+    </div>
+
+    <!-- Cut 5: mosaic border -->
+    <div style="background:#fff; border:1px solid #ddd; border-radius:10px; padding:14px; margin-bottom:8px;">
+
+      <div style="display:flex; gap:12px; align-items:start;">
+        <div style="width:56px; height:38px; background:#fef0f0; border:2px solid #e44; border-radius:6px; flex-shrink:0; position:relative;">
+          <div style="position:absolute; right:0; top:0; bottom:0; width:3px; background:#e44; border-left:1px dashed #e44;"></div>
+          <span style="position:absolute; bottom:1px; right:3px; font-size:8px; color:#e44; font-weight:bold;">75</span>
+          <span style="position:absolute; left:2px; top:50%; transform:translateY(-50%); font-size:8px; color:#888;">100</span>
+        </div>
+
+        <div style="flex:1; min-width:0;">
+          <div style="font-size:13px; font-weight:bold;">75 × 100mm</div>
+          <div style="font-size:11px; color:#888; margin-top:2px;">Right edge cut · Blue mosaic</div>
+          <div style="margin-top:8px;">
+            <div style="font-size:10px; color:#888; margin-bottom:4px;">APPLIED TO:</div>
+            <div style="display:flex; gap:6px;">
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Front wall <strong style="color:#e44;">×2</strong>
+              </span>
+              <span style="background:#f0f0f0; padding:3px 8px; border-radius:10px; font-size:10px;">
+                Left wall <strong style="color:#e44;">×2</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div style="background:#e44; color:#fff; padding:4px 10px; border-radius:12px; font-size:13px; font-weight:bold; flex-shrink:0;">×4</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Bottom tab bar -->
+  <div style="display:flex; border-top:1px solid #ccc; background:#e0e0e0;">
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Surfaces</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Layout</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; color:#888;">Preview</div>
+    <div style="flex:1; padding:8px; text-align:center; font-size:11px; border-bottom:3px solid #2563eb; color:#2563eb; font-weight:bold;">Cut List</div>
+  </div>
+
+  </div>
+</div>
+
+<div style="margin-top:24px;">
+
+  <h3>Grouping Logic</h3>
+  <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:20px; font-size:13px; line-height:2; font-family:monospace;">
+
+    <span style="color:#888;">// Walk all LayoutResults across all surfaces</span>
+    <span style="color:#60a5fa;">for each</span> PlacedTile <span style="color:#60a5fa;">where</span> isCut == <span style="color:#34d399;">true</span>:
+
+    <span style="color:#888;">// Group key: same tile group + same dimensions + same cut shape</span>
+    key = {tileGroupId, w, h, cutEdges}
+
+    <span style="color:#888;">// Track where this cut appears</span>
+    locations.push({surfaceId, surfaceName, count})
+
+    <span style="color:#888;">// Result: one row per unique cut, with location badges underneath</span>
+  </div>
+
+</div>

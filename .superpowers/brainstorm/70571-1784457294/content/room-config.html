@@ -1,0 +1,150 @@
+<h2>Room Configuration — Surface Positioning</h2>
+<p class="subtitle">How tilers set room dimensions and surface positions</p>
+
+<div style="display:flex; gap:24px; margin-top:16px;">
+
+  <!-- Screen 1: Room dimensions input -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Step 1: Set room dimensions</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:15px; font-weight:bold;">New Room</span>
+    </div>
+
+    <div style="padding:16px;">
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px; color:#888; margin-bottom:4px;">ROOM NAME</div>
+        <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">Bathroom 3F</div>
+      </div>
+
+      <div style="margin-bottom:20px;">
+        <div style="font-size:12px; color:#888; margin-bottom:8px;">DIMENSIONS (mm)</div>
+
+        <div style="display:flex; gap:8px; margin-bottom:8px;">
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Width</div>
+            <div style="background:#fff; border:1px solid #2563eb; border-radius:6px; padding:10px; font-size:14px;">2000</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Depth</div>
+            <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">1500</div>
+          </div>
+          <div style="flex:1;">
+            <div style="font-size:10px; color:#888;">Height</div>
+            <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">2400</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <div style="font-size:12px; color:#888; margin-bottom:8px;">SURFACES TO CREATE</div>
+
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Front wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Back wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Left wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Right wall ✓</span>
+          <span style="background:#2563eb; color:#fff; padding:6px 12px; border-radius:16px; font-size:12px;">Floor ✓</span>
+        </div>
+        <div style="font-size:11px; color:#888; margin-top:8px;">Tap to toggle. Wall dimensions auto-computed from room size.</div>
+      </div>
+
+      <div style="background:#2563eb; color:#fff; padding:12px; border-radius:8px; text-align:center; font-size:14px;">
+        Create Room
+      </div>
+
+    </div>
+    </div>
+  </div>
+
+  <!-- Screen 2: Floor plan view with surface positions -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Step 2: Position overview (after creation)</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:8px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:15px; font-weight:bold;">Bathroom 3F</span>
+      <span style="font-size:11px; color:#888; margin-left:auto;">Top-down view</span>
+    </div>
+
+    <!-- Top-down room diagram -->
+    <div style="padding:20px; text-align:center;">
+
+      <div style="display:inline-block; position:relative; width:200px; height:150px; border:2px solid #333; background:#f8f6f0;">
+
+        <!-- Wall labels + dimensions -->
+        <div style="position:absolute; top:-18px; left:0; right:0; text-align:center; font-size:10px; color:#333;">
+          Front wall — 2000mm
+        </div>
+        <div style="position:absolute; bottom:-18px; left:0; right:0; text-align:center; font-size:10px; color:#333;">
+          Back wall — 2000mm
+        </div>
+        <div style="position:absolute; left:-60px; top:50%; transform:translateY(-50%) rotate(-90deg); font-size:10px; color:#333; white-space:nowrap;">
+          Left wall — 1500mm
+        </div>
+        <div style="position:absolute; right:-60px; top:50%; transform:translateY(-50%) rotate(-90deg); font-size:10px; color:#333; white-space:nowrap;">
+          Right wall — 1500mm
+        </div>
+
+        <!-- Floor -->
+        <div style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center;">
+          <span style="font-size:10px; color:#888;">Floor<br/>2000 × 1500mm</span>
+        </div>
+
+        <!-- Wall indicators -->
+        <div style="position:absolute; top:0; left:0; right:0; height:6px; background:#a78bfa;"></div>
+        <div style="position:absolute; bottom:0; left:0; right:0; height:6px; background:#a78bfa;"></div>
+        <div style="position:absolute; left:0; top:0; bottom:0; width:6px; background:#60a5fa;"></div>
+        <div style="position:absolute; right:0; top:0; bottom:0; width:6px; background:#60a5fa;"></div>
+
+      </div>
+
+      <p style="font-size:11px; color:#888; margin-top:12px;">Surfaces auto-positioned from room dimensions.<br/>Tap a wall or floor to adjust its dimensions and tile groups.</p>
+    </div>
+
+    <!-- Surface list with positions -->
+    <div style="padding:0 12px;">
+      <div style="font-size:11px; color:#888; margin-bottom:4px;">POSITION SUMMARY</div>
+    </div>
+    <div style="padding:0 12px 12px; font-size:10px; font-family:monospace; color:#888; line-height:1.6;">
+      <div>Front wall: x=0, y=0, z=0, rot=0°</div>
+      <div>Right wall: x=2000, y=0, z=0, rot=90°</div>
+      <div>Back wall: x=2000, y=0, z=1500, rot=180°</div>
+      <div>Left wall: x=0, y=0, z=1500, rot=270°</div>
+      <div>Floor: x=0, y=0, z=0, rot=floor</div>
+    </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;">
+
+  <h3>How Positioning Works (MVP)</h3>
+
+  <div class="mockup">
+    <div class="mockup-body" style="padding:20px; font-size:14px; line-height:1.8;">
+
+    <p><strong>Auto-computed.</strong> The tiler only enters the room's overall width × depth × height. The app automatically places:</p>
+
+    <ul style="color:var(--text-secondary);">
+      <li>Front wall at <code>z=0</code>, facing inward, spanning full width × height</li>
+      <li>Back wall at <code>z=depth</code>, facing inward, spanning full width × height</li>
+      <li>Left wall at <code>x=0</code>, facing inward, spanning full depth × height</li>
+      <li>Right wall at <code>x=width</code>, facing inward, spanning full depth × height</li>
+      <li>Floor at <code>y=0</code>, facing up, spanning full width × depth</li>
+    </ul>
+
+    <p>The tiler can then <strong>toggle off</strong> surfaces they don't need (e.g., a room with only 2 walls being tiled). For MVP, surface dimensions and positions are derived from room dimensions — not freely editable.</p>
+
+    <p style="color:var(--text-secondary); font-size:13px;">Stretch goal: free-form positioning where the tiler can place surfaces anywhere in 3D space, useful for L-shaped rooms or partial walls.</p>
+
+    </div>
+  </div>
+
+</div>

@@ -1,0 +1,159 @@
+<h2>Camera Capture — Tile Texture Scanning</h2>
+<p class="subtitle">Like a document scanner — detect edges, perspective-correct, save as texture</p>
+
+<div style="display:flex; gap:24px; margin-top:16px;">
+
+  <!-- Screen 1: Camera view -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Step 1: Position tile</div>
+    <div class="mockup-body" style="padding:0; background:#000;">
+
+    <!-- Camera viewfinder -->
+    <div style="position:relative; min-height:380px; background:#1a1a1a; display:flex; align-items:center; justify-content:center;">
+
+      <!-- Simulated camera feed -->
+      <div style="width:100%; height:100%; background:linear-gradient(135deg, #332211 0%, #554433 30%, #443322 50%, #665544 70%, #554433 100%); position:relative; overflow:hidden;">
+
+        <!-- Tile visible on desk/floor -->
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%) rotate(-3deg);
+                    width:180px; height:180px; background:linear-gradient(135deg, #f0e8d5, #e8dcc8, #d4c8a8);
+                    border:4px solid rgba(200,180,150,0.5); box-shadow:0 4px 20px rgba(0,0,0,0.4);">
+
+          <!-- Tile texture detail -->
+          <div style="position:absolute; inset:8px; background:
+            repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 3px),
+            linear-gradient(135deg, #f0e8d5 0%, #e8dcc8 40%, #d4c8a8 70%, #c8b898 100%);">
+            <!-- Subtle stone pattern -->
+            <div style="position:absolute; top:20%; left:15%; width:30%; height:25%; background:rgba(255,255,255,0.1); border-radius:50%;"></div>
+            <div style="position:absolute; bottom:25%; right:20%; width:25%; height:20%; background:rgba(0,0,0,0.05); border-radius:50%;"></div>
+          </div>
+        </div>
+
+        <!-- Edge detection guides -->
+        <div style="position:absolute; top:50%; left:50%; transform:translate(-50%,-50%);
+                    width:200px; height:200px; border:2px dashed rgba(255,255,255,0.5); border-radius:4px;"></div>
+
+        <!-- Corner markers -->
+        <div style="position:absolute; top:calc(50% - 100px); left:calc(50% - 100px); width:16px; height:16px; border-top:3px solid #fff; border-left:3px solid #fff; border-radius:2px 0 0 0;"></div>
+        <div style="position:absolute; top:calc(50% - 100px); right:calc(50% - 100px); width:16px; height:16px; border-top:3px solid #fff; border-right:3px solid #fff; border-radius:0 2px 0 0;"></div>
+        <div style="position:absolute; bottom:calc(50% - 100px); left:calc(50% - 100px); width:16px; height:16px; border-bottom:3px solid #fff; border-left:3px solid #fff; border-radius:0 0 0 2px;"></div>
+        <div style="position:absolute; bottom:calc(50% - 100px); right:calc(50% - 100px); width:16px; height:16px; border-bottom:3px solid #fff; border-right:3px solid #fff; border-radius:0 0 2px 0;"></div>
+      </div>
+
+      <!-- Instruction text -->
+      <div style="position:absolute; top:20px; left:0; right:0; text-align:center; color:#fff; font-size:14px; font-weight:bold;">
+        Position the tile within the guides
+      </div>
+      <div style="position:absolute; top:42px; left:0; right:0; text-align:center; color:rgba(255,255,255,0.6); font-size:11px;">
+        Place on a contrasting surface for best results
+      </div>
+
+      <!-- Capture button -->
+      <div style="position:absolute; bottom:30px; left:50%; transform:translateX(-50%);">
+        <div style="width:64px; height:64px; border-radius:50%; border:4px solid #fff; background:transparent; display:flex; align-items:center; justify-content:center;">
+          <div style="width:50px; height:50px; border-radius:50%; background:#fff;"></div>
+        </div>
+      </div>
+
+    </div>
+
+    </div>
+  </div>
+
+  <!-- Screen 2: Review + save -->
+  <div class="mockup" style="flex:1;">
+    <div class="mockup-header">Step 2: Review &amp; save</div>
+    <div class="mockup-body" style="padding:0; background:#f5f5f5;">
+
+    <div style="background:#e0e0e0; padding:6px 12px; display:flex; align-items:center; gap:4px; border-bottom:1px solid #ccc;">
+      <span style="font-size:16px;">‹</span>
+      <span style="font-size:14px; font-weight:bold;">New Tile Texture</span>
+      <span style="margin-left:auto; font-size:11px; color:#888;">Retake</span>
+    </div>
+
+    <!-- Perspective-corrected result -->
+    <div style="padding:20px; text-align:center;">
+      <div style="font-size:11px; color:#888; margin-bottom:8px;">PERSPECTIVE-CORRECTED</div>
+      <div style="display:inline-block; width:200px; height:200px; background:linear-gradient(135deg, #f0e8d5, #e8dcc8, #d4c8a8); border:1px solid #ddd; border-radius:8px; box-shadow:0 2px 8px rgba(0,0,0,0.1); position:relative;">
+        <!-- Clean square texture preview -->
+        <div style="position:absolute; inset:4px; background:linear-gradient(135deg, #f0e8d5 0%, #e8dcc8 40%, #d4c8a8 70%, #c8b898 100%);">
+          <div style="position:absolute; top:20%; left:15%; width:30%; height:25%; background:rgba(255,255,255,0.1); border-radius:50%;"></div>
+          <div style="position:absolute; bottom:25%; right:20%; width:25%; height:20%; background:rgba(0,0,0,0.05); border-radius:50%;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tile group info -->
+    <div style="padding:0 20px;">
+      <div style="margin-bottom:12px;">
+        <div style="font-size:11px; font-weight:bold; color:#888; margin-bottom:4px;">TILE NAME</div>
+        <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">White subway tile</div>
+      </div>
+
+      <div style="display:flex; gap:8px; margin-bottom:16px;">
+        <div style="flex:1;">
+          <div style="font-size:10px; color:#888;">Width (mm)</div>
+          <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">300</div>
+        </div>
+        <div style="flex:1;">
+          <div style="font-size:10px; color:#888;">Height (mm)</div>
+          <div style="background:#fff; border:1px solid #ccc; border-radius:6px; padding:10px; font-size:14px;">200</div>
+        </div>
+      </div>
+
+      <div style="background:#2563eb; color:#fff; padding:12px; border-radius:8px; text-align:center; font-size:14px; margin-bottom:8px;">
+        Save to Tile Library
+      </div>
+    </div>
+
+    </div>
+  </div>
+
+</div>
+
+<div style="margin-top:24px;">
+
+  <h3>Capture + Import Flow</h3>
+
+  <div style="background:var(--bg-secondary,#1e1e2e); border-radius:12px; padding:24px; text-align:center;">
+
+    <div style="display:flex; gap:12px; justify-content:center;">
+
+      <!-- Capture path -->
+      <div style="flex:1; max-width:280px; background:#1e1e2e; border-radius:10px; padding:16px; border:1px solid #333;">
+        <div style="font-size:28px; margin-bottom:8px;">📸</div>
+        <div style="font-weight:bold; font-size:13px; margin-bottom:8px;">Camera Capture</div>
+        <div style="font-size:11px; color:#888; line-height:1.6; text-align:left;">
+          1. Open camera with guides<br/>
+          2. Position tile → edge detection snaps guides to tile edges<br/>
+          3. Tap capture → auto perspective-correct<br/>
+          4. Review + name + set tile size<br/>
+          5. Save to library
+        </div>
+      </div>
+
+      <!-- OR -->
+      <div style="display:flex; align-items:center; font-size:13px; color:#888; font-weight:bold;">OR</div>
+
+      <!-- Import path -->
+      <div style="flex:1; max-width:280px; background:#1e1e2e; border-radius:10px; padding:16px; border:1px solid #333;">
+        <div style="font-size:28px; margin-bottom:8px;">🖼️</div>
+        <div style="font-weight:bold; font-size:13px; margin-bottom:8px;">Import from Gallery</div>
+        <div style="font-size:11px; color:#888; line-height:1.6; text-align:left;">
+          1. Pick image from device gallery<br/>
+          2. Crop to square (manual)<br/>
+          3. Name + set tile size<br/>
+          4. Save to library
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+
+  <h3 style="margin-top:20px;">Technical Note</h3>
+  <div style="background:var(--bg-secondary,#1e1e2e); border-radius:10px; padding:16px; font-size:13px; color:var(--text-secondary); line-height:1.6;">
+    Uses Flutter <code>camera</code> plugin + edge detection. When the tiler positions the tile within the guides, edge detection finds the 4 corners of the tile (like document scanning). The captured image is perspective-corrected to a flat square using a homography transform. Result: a clean, square texture ready for rendering.
+  </div>
+
+</div>
