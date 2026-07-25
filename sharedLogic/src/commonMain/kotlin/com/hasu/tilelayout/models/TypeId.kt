@@ -28,7 +28,10 @@ object TypeId {
     fun prefix(typeId: String): String = typeId.substringBefore('_')
 
     fun timestamp(typeId: String): Long {
-        val bytes = decodeCrockford(typeId.substringAfter('_'))
+        val suffix = typeId.substringAfter('_', "")
+        require(suffix.length == 26) { "Invalid TypeId: expected 26-char suffix, got ${suffix.length}" }
+        
+        val bytes = decodeCrockford(suffix)
         return (bytes[0].toLong() and 0xFF shl 40) or
             (bytes[1].toLong() and 0xFF shl 32) or
             (bytes[2].toLong() and 0xFF shl 24) or
