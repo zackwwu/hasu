@@ -1,0 +1,175 @@
+CREATE TABLE projects (
+    id TEXT NOT NULL PRIMARY KEY,
+    name TEXT NOT NULL,
+    units TEXT NOT NULL DEFAULT 'MM',
+    created_at INTEGER NOT NULL
+);
+
+CREATE TABLE tile_groups (
+    id TEXT NOT NULL PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    tile_width REAL NOT NULL,
+    tile_height REAL NOT NULL,
+    texture_path TEXT,
+    source TEXT NOT NULL DEFAULT 'IMPORTED',
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE rooms (
+    id TEXT NOT NULL PRIMARY KEY,
+    project_id TEXT NOT NULL,
+    name TEXT NOT NULL,
+    width REAL NOT NULL,
+    depth REAL NOT NULL,
+    height REAL NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE surfaces (
+    id TEXT NOT NULL PRIMARY KEY,
+    room_id TEXT NOT NULL,
+    type TEXT NOT NULL,
+    width REAL NOT NULL,
+    height REAL NOT NULL,
+    pos_x REAL NOT NULL,
+    pos_y REAL NOT NULL,
+    pos_z REAL NOT NULL,
+    pos_rotation REAL NOT NULL,
+    grout_color TEXT NOT NULL DEFAULT 'GREY',
+    grout_width REAL NOT NULL DEFAULT 3.0,
+    FOREIGN KEY (room_id) REFERENCES rooms(id) ON DELETE CASCADE
+);
+
+CREATE TABLE surface_tile_groups (
+    id TEXT NOT NULL PRIMARY KEY,
+    surface_id TEXT NOT NULL,
+    tile_group_id TEXT NOT NULL,
+    region_x REAL NOT NULL,
+    region_y REAL NOT NULL,
+    region_w REAL NOT NULL,
+    region_h REAL NOT NULL,
+    pattern TEXT NOT NULL DEFAULT 'GRID',
+    offset_x REAL NOT NULL DEFAULT 0.0,
+    offset_y REAL NOT NULL DEFAULT 0.0,
+    FOREIGN KEY (surface_id) REFERENCES surfaces(id) ON DELETE CASCADE,
+    FOREIGN KEY (tile_group_id) REFERENCES tile_groups(id) ON DELETE CASCADE
+);
+
+CREATE TABLE layout_results (
+    id TEXT NOT NULL PRIMARY KEY,
+    surface_id TEXT NOT NULL,
+    computed_at INTEGER NOT NULL,
+    stale INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (surface_id) REFERENCES surfaces(id) ON DELETE CASCADE
+);
+
+CREATE TABLE placed_tiles (
+    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    layout_result_id TEXT NOT NULL,
+    x REAL NOT NULL,
+    y REAL NOT NULL,
+    w REAL NOT NULL,
+    h REAL NOT NULL,
+    rotation REAL NOT NULL DEFAULT 0,
+    is_cut INTEGER NOT NULL DEFAULT 0,
+    cut_edges TEXT NOT NULL DEFAULT '',
+    tile_group_id TEXT NOT NULL,
+    FOREIGN KEY (layout_result_id) REFERENCES layout_results(id) ON DELETE CASCADE,
+    FOREIGN KEY (tile_group_id) REFERENCES tile_groups(id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_tile_groups_project_id ON tile_groups(project_id);
+CREATE INDEX idx_rooms_project_id ON rooms(project_id);
+CREATE INDEX idx_surfaces_room_id ON surfaces(room_id);
+CREATE INDEX idx_surface_tile_groups_surface_id ON surface_tile_groups(surface_id);
+CREATE INDEX idx_surface_tile_groups_tile_group_id ON surface_tile_groups(tile_group_id);
+CREATE INDEX idx_layout_results_surface_id ON layout_results(surface_id);
+CREATE INDEX idx_placed_tiles_layout_result_id ON placed_tiles(layout_result_id);
+CREATE INDEX idx_placed_tiles_tile_group_id ON placed_tiles(tile_group_id);
+
+-- Queries
+getProjects:
+SELECT * FROM projects ORDER BY created_at DESC;
+
+getProjectById:
+SELECT * FROM projects WHERE id = ?;
+
+insertProject:
+INSERT OR REPLACE INTO projects(id, name, units, created_at) VALUES (?, ?, ?, ?);
+
+deleteProject:
+DELETE FROM projects WHERE id = ?;
+
+getTileGroupsByProject:
+SELECT * FROM tile_groups WHERE project_id = ? ORDER BY name ASC;
+
+getTileGroupById:
+SELECT * FROM tile_groups WHERE id = ?;
+
+insertTileGroup:
+INSERT OR REPLACE INTO tile_groups(id, project_id, name, tile_width, tile_height, texture_path, source)
+VALUES (?, ?, ?, ?, ?, ?, ?);
+
+deleteTileGroup:
+DELETE FROM tile_groups WHERE id = ?;
+
+getRoomsByProject:
+SELECT * FROM rooms WHERE project_id = ? ORDER BY name ASC;
+
+getRoomById:
+SELECT * FROM rooms WHERE id = ?;
+
+insertRoom:
+INSERT OR REPLACE INTO rooms(id, project_id, name, width, depth, height) VALUES (?, ?, ?, ?, ?, ?);
+
+deleteRoom:
+DELETE FROM rooms WHERE id = ?;
+
+getSurfacesByRoom:
+SELECT * FROM surfaces WHERE room_id = ?;
+
+getSurfaceById:
+SELECT * FROM surfaces WHERE id = ?;
+
+insertSurface:
+INSERT OR REPLACE INTO surfaces(id, room_id, type, width, height, pos_x, pos_y, pos_z, pos_rotation, grout_color, grout_width)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteSurface:
+DELETE FROM surfaces WHERE id = ?;
+
+getSTGsBySurface:
+SELECT * FROM surface_tile_groups WHERE surface_id = ?;
+
+getSTGById:
+SELECT * FROM surface_tile_groups WHERE id = ?;
+
+insertSTG:
+INSERT OR REPLACE INTO surface_tile_groups(id, surface_id, tile_group_id, region_x, region_y, region_w, region_h, pattern, offset_x, offset_y)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateSTGOffset:
+UPDATE surface_tile_groups SET offset_x = ?, offset_y = ? WHERE id = ?;
+
+deleteSTG:
+DELETE FROM surface_tile_groups WHERE id = ?;
+
+getLayoutResultBySurface:
+SELECT * FROM layout_results WHERE surface_id = ?;
+
+insertLayoutResult:
+INSERT OR REPLACE INTO layout_results(id, surface_id, computed_at, stale) VALUES (?, ?, ?, ?);
+
+deleteLayoutResult:
+DELETE FROM layout_results WHERE id = ?;
+
+getTilesByLayoutResult:
+SELECT * FROM placed_tiles WHERE layout_result_id = ?;
+
+insertPlacedTile:
+INSERT INTO placed_tiles(layout_result_id, x, y, w, h, rotation, is_cut, cut_edges, tile_group_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+deleteTilesByLayoutResult:
+DELETE FROM placed_tiles WHERE layout_result_id = ?;
