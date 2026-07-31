@@ -23,12 +23,21 @@ object IsometricProjection {
     fun projectSurfaceCorners(surface: Surface, viewAngle: Int, originX: Double, originY: Double): List<ScreenPoint> {
         val p = surface.position
         val w = surface.width; val h = surface.height
-        return listOf(
-            project(p.x, p.y, p.z, viewAngle, originX, originY),
-            project(p.x + w, p.y, p.z, viewAngle, originX, originY),
-            project(p.x + w, p.y + h, p.z, viewAngle, originX, originY),
-            project(p.x, p.y + h, p.z, viewAngle, originX, originY),
-        )
+        return if (surface.type == SurfaceType.FLOOR) {
+            listOf(
+                project(p.x, p.y, p.z, viewAngle, originX, originY),
+                project(p.x + w, p.y, p.z, viewAngle, originX, originY),
+                project(p.x + w, p.y, p.z + h, viewAngle, originX, originY),
+                project(p.x, p.y, p.z + h, viewAngle, originX, originY),
+            )
+        } else {
+            listOf(
+                project(p.x, p.y, p.z, viewAngle, originX, originY),
+                project(p.x + w, p.y, p.z, viewAngle, originX, originY),
+                project(p.x + w, p.y + h, p.z, viewAngle, originX, originY),
+                project(p.x, p.y + h, p.z, viewAngle, originX, originY),
+            )
+        }
     }
 
     fun orderSurfaces(surfaces: List<Surface>, viewAngle: Int): List<Surface> {

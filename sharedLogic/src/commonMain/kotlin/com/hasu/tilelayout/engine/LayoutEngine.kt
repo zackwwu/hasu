@@ -36,8 +36,8 @@ object LayoutEngine {
         if (remW > 0 && remW < tg.tileWidth * MIN_CUT_RATIO) { fullCols--; remW = region.width - fullCols * unitW }
         if (remH > 0 && remH < tg.tileHeight * MIN_CUT_RATIO) { fullRows--; remH = region.height - fullRows * unitH }
 
-        val wrappedOffX = offX % unitW
-        val wrappedOffY = offY % unitH
+        val wrappedOffX = ((offX % unitW) + unitW) % unitW
+        val wrappedOffY = ((offY % unitH) + unitH) % unitH
         val startX = remW / 2 + wrappedOffX
         val startY = remH / 2 + wrappedOffY
 
@@ -45,13 +45,16 @@ object LayoutEngine {
             for (row in -1..fullRows + 1) for (col in -1..fullCols + 1) {
                 val x = startX + col * unitW
                 val y = startY + row * unitH
+                if (x + tg.tileWidth <= 0 || y + tg.tileHeight <= 0) continue
                 if (x >= region.width || y >= region.height) continue
-                val w = min(tg.tileWidth, region.width - x)
-                val h = min(tg.tileHeight, region.height - y)
-                if (w <= 0 || h <= 0) continue
-                val isCut = abs(w - tg.tileWidth) > 0.01 || abs(h - tg.tileHeight) > 0.01
-                val edges = if (isCut) cutEdges(x, y, w, h, region.width, region.height) else emptyList()
-                add(PlacedTile(region.x + x, region.y + y, w, h, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
+                val cx = max(0.0, x)
+                val cy = max(0.0, y)
+                val cw = min(x + tg.tileWidth, region.width) - cx
+                val ch = min(y + tg.tileHeight, region.height) - cy
+                if (cw <= 0 || ch <= 0) continue
+                val isCut = abs(cw - tg.tileWidth) > 0.01 || abs(ch - tg.tileHeight) > 0.01
+                val edges = if (isCut) cutEdges(cx, cy, cw, ch, region.width, region.height) else emptyList()
+                add(PlacedTile(region.x + cx, region.y + cy, cw, ch, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
             }
         }
     }
@@ -84,13 +87,16 @@ object LayoutEngine {
 
                 for (col in 0..colCount) {
                     val x = startX + col * unitW
+                    if (x + tg.tileWidth <= 0 || y + tg.tileHeight <= 0) continue
                     if (x >= region.width || y >= region.height) continue
-                    val w = min(tg.tileWidth, region.width - x)
-                    val h = min(tg.tileHeight, region.height - y)
-                    if (w <= 0 || h <= 0) continue
-                    val isCut = abs(w - tg.tileWidth) > 0.01 || abs(h - tg.tileHeight) > 0.01
-                    val edges = if (isCut) cutEdges(x, y, w, h, region.width, region.height) else emptyList()
-                    add(PlacedTile(region.x + x, region.y + y, w, h, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
+                    val cx = max(0.0, x)
+                    val cy = max(0.0, y)
+                    val cw = min(x + tg.tileWidth, region.width) - cx
+                    val ch = min(y + tg.tileHeight, region.height) - cy
+                    if (cw <= 0 || ch <= 0) continue
+                    val isCut = abs(cw - tg.tileWidth) > 0.01 || abs(ch - tg.tileHeight) > 0.01
+                    val edges = if (isCut) cutEdges(cx, cy, cw, ch, region.width, region.height) else emptyList()
+                    add(PlacedTile(region.x + cx, region.y + cy, cw, ch, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
                 }
             }
         }
