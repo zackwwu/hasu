@@ -8,8 +8,8 @@ struct RoomListView: View {
     @State private var rooms: [Room] = []
     @State private var showAddRoom = false
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         Group {
@@ -82,8 +82,8 @@ private struct AddRoomSheet: View {
     @State private var depth: Double = 4000
     @State private var height: Double = 2400
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         NavigationStack {
@@ -124,7 +124,7 @@ private struct AddRoomSheet: View {
                     Button("Add") {
                         Task {
                             let room = Room(
-                                id: nil,
+                                id: TypeId.generate(prefix: "rm"),
                                 projectId: projectId,
                                 name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? "Room" : name.trimmingCharacters(in: .whitespacesAndNewlines),

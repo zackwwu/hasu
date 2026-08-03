@@ -8,9 +8,9 @@ struct CutListTabView: View {
 
     @State private var cutEntries: [CutEntry] = []
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var surfaceRepo: SurfaceRepository = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
-    private lazy var layoutRepo: LayoutResultRepository = SqlDelightLayoutResultRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var surfaceRepo: SurfaceRepository = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
+    lazy var layoutRepo: LayoutResultRepository = SqlDelightLayoutResultRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         Group {

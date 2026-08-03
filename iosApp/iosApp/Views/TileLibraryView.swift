@@ -8,8 +8,8 @@ struct TileLibraryView: View {
     @State private var tileGroups: [TileGroup] = []
     @State private var showAdd = false
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         Group {
@@ -119,8 +119,8 @@ private struct AddTileGroupSheet: View {
     @State private var tileWidth: Double = 300
     @State private var tileHeight: Double = 200
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         NavigationStack {

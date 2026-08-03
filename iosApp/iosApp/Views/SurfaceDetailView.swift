@@ -174,7 +174,7 @@ struct SurfaceDetailView: View {
         // Default: first tile group from the project, or we need a tile group id
         // For now, we create the STG covering the full surface with the first available tile group
         guard let room = try? await SqlDelightRoomRepository(queries: db.tileLayoutDbQueries).getById(id: surface.roomId),
-              let projectTileGroups = try? await tileGroupRepo.getByRoom(projectId: room.projectId),
+              let projectTileGroups = try? await tileGroupRepo.getByProject(projectId: room.projectId),
               let firstTG = projectTileGroups.first ?? nil
         else {
             // No tile groups exist yet — surface detail just shows "no tile groups"
@@ -187,7 +187,7 @@ struct SurfaceDetailView: View {
             height: surface.height
         )
         let stg = SurfaceTileGroup(
-            id: nil,  // Will be auto-generated
+            id: TypeId.generate(prefix: "stg"),
             surfaceId: surface.id,
             tileGroupId: firstTG.id,
             region: region,

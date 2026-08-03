@@ -6,6 +6,7 @@ struct RoomEditorView: View {
     let roomId: String
     @StateObject private var vm = IOSRoomEditorViewModel()
     @State private var selectedTab = 0
+    @State private var showHelp = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -36,6 +37,21 @@ struct RoomEditorView: View {
         }
         .navigationTitle("Room Editor")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    showHelp = true
+                } label: {
+                    Image(systemName: "questionmark.circle")
+                }
+                .accessibilityLabel("Coordinate system help")
+            }
+        }
+        .sheet(isPresented: $showHelp) {
+            NavigationStack {
+                HelpDiagramView()
+            }
+        }
         .task {
             await vm.load(roomId: roomId)
         }

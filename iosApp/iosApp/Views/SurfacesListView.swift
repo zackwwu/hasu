@@ -8,8 +8,8 @@ struct SurfacesListView: View {
 
     @State private var room: Room? = nil
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
+    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
 
     var body: some View {
         Group {

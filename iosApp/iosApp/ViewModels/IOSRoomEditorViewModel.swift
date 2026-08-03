@@ -12,7 +12,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     @Published var selectedSurfaceId: String? = nil
     @Published var viewAngle: Int = 0
     @Published var lockedSurfaceIds: Set<String> = []
-    @Published var undoBuffer: [String: KotlinPair<Swift.Double, Swift.Double>]? = nil
+    @Published var undoBuffer: [String: KotlinPair<KotlinDouble, KotlinDouble>]? = nil
     @Published var currentTiles: [PlacedTile] = []
     @Published var isDragging = false
 
@@ -92,7 +92,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     }
 
     func undo() async {
-        let buffer = sharedVM.undoBuffer.value as? [String: KotlinPair<Swift.Double, Swift.Double>]
+        let buffer = sharedVM.undoBuffer.value as? [String: KotlinPair<KotlinDouble, KotlinDouble>]
         sharedVM.undo()
         if let priors = buffer {
             do {
@@ -156,7 +156,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
         surfaces = sharedVM.surfaces.value as? [Surface] ?? []
         selectedSurfaceId = sharedVM.selectedSurfaceId.value as? String
         viewAngle = Int(sharedVM.viewAngle.value as? Int32 ?? 0)
-        lockedSurfaceIds = Set(sharedVM.lockedSurfaceIds.value as? [String] ?? [])
+        lockedSurfaceIds = sharedVM.lockedSurfaceIds.value as? Set<String> ?? []
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
         // undoBuffer stays as the shared value for undo flow
     }
