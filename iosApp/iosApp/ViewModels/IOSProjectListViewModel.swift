@@ -17,12 +17,12 @@ final class IOSProjectListViewModel: ObservableObject {
     )
 
     func load() async {
-        try? await sharedVM.load()
+        _ = try? await sharedVM.load()
         refresh()
     }
 
     func create(name: String) async {
-        try? await sharedVM.create(name: name)
+        _ = try? await sharedVM.create(name: name)
         refresh()
     }
 
@@ -30,13 +30,14 @@ final class IOSProjectListViewModel: ObservableObject {
         let doomed = offsets.map { projects[$0] }
         Task {
             for project in doomed {
-                try? await sharedVM.delete(id: project.id)
+                _ = try? await sharedVM.delete(id: project.id)
             }
             refresh()
         }
     }
 
     private func refresh() {
-        projects = sharedVM.projects.value
+        // `StateFlow.value` is exported to ObjC as `Any?` — cast back to [Project].
+        projects = (sharedVM.projects.value as? [Project]) ?? []
     }
 }
