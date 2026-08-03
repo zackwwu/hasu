@@ -1651,4 +1651,401 @@ git commit -m "feat: integration pipeline, PNG export on both platforms"
 
 ---
 
-**Plan complete.** 20 tasks across 9 phases. Phases 1-6 are the shared Kotlin module (heavy lift). Phases 7-8 are thin platform UIs observing StateFlows and drawing via native Canvas. Phase 9 wires everything together.
+## Phase 10: Edge Detection (Tile Texture Scanning)
+
+**Goal:** Scan tile textures using the device camera — detect the tile's rectangular edges in real-time, apply perspective correction, and extract a clean top-down texture image. Works like document scanning: find the rectangle → correct perspective → crop → save.
+
+**Scope:** iOS (Vision framework + Core Image) + Android (CameraX ImageAnalysis + OpenCV).
+
+---
+
+### Task 21: Edge Detection — iOS
+
+- [ ] **Step 1: Replace CameraView with EdgeDetectionCameraView**
+
+Replace the photo-only `CameraView.swift` with a real-time rectangle-detection pipeline:
+
+```swift
+// EdgeDetectionCameraView.swift
+import SwiftUI
+import AVFoundation
+import Vision
+
+struct EdgeDetectionCameraView: View {
+    let onCapture: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var model = EdgeDetectionModel()
+
+    var body: some View {
+        ZStack {
+            EdgeDetectionPreview(session: model.session)
+                .ignoresSafeArea()
+
+            // Semi-transparent overlay with rectangle cutout
+            if let rect = model.detectedRect {
+                EdgeOverlayShape(detectedRect: rect)
+                    .fill(Color.black.opacity(0.4))
+                    .allowsHitTesting(false)
+            }
+
+            VStack {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title).foregroundStyle(.white).shadow(radius: 4)
+                    }.padding()
+                    Spacer()
+                    Button { model.toggleFlash() } label: {
+                        Image(systemName: model.flashOn ? "bolt.fill" : "bolt.slash.fill")
+                            .font(.title3).foregroundStyle(.white)
+                    }.padding()
+                }
+                Spacer()
+                if model.isStable {
+                    Text("Hold steady…").font(.caption).foregroundStyle(.green)
+                        .padding(8).background(.black.opacity(0.5)).clipShape(Capsule())
+                }
+                Button { model.captureAndCorrect() } label: {
+                    ZStack {
+                        Circle().stroke(.white, lineWidth: 4).frame(width: 72, height: 72)
+                        Circle().fill(model.isStable ? Color.green : Color.white)
+                            .frame(width: 60, height: 60)
+                    }
+                }.padding(.bottom, 40)
+            }
+        }
+        .onAppear { model.start() }
+        .onDisappear { model.stop() }
+        .onChange(of: model.capturedImage) { _, image in
+            if let image { onCapture(image) }
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Implement EdgeDetectionModel with Vision**
+
+```swift
+// EdgeDetectionModel.swift
+@MainActor
+final class EdgeDetectionModel: NSObject, ObservableObject {
+    let session = AVCaptureSession()
+    @Published var detectedRect: CGRect?
+    @Published var isStable = false
+    @Published var capturedImage: UIImage?
+    @Published var flashOn = false
+    @Published var viewSize: CGSize = .zero
+
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let sessionQueue = DispatchQueue(label: "edge.session")
+    private let procQueue = DispatchQueue(label: "edge.proc")
+
+    private lazy var rectRequest: VNDetectRectanglesRequest = {
+        let req = VNDetectRectanglesRequest { [weak self] r, e in
+            self?.handleRectangles(r, e)
+        }
+        req.minimumAspectRatio = 0.3
+        req.maximumAspectRatio = 1.0
+        req.minimumSize = 0.15
+        req.maximumObservations = 1
+        req.minimumConfidence = 0.7
+        return req
+    }()
+
+    private var lastRect: CGRect?
+    private var stableCount = 0
+    private let stableFrames = 15
+    private var latestPixelBuffer: CVPixelBuffer?
+    private var latestObservation: VNRectangleObservation?
+
+    func start() { /* AVCaptureSession setup — same as current CameraModel */ }
+    func stop() { session.stopRunning() }
+    func toggleFlash() { /* torch on/off */ }
+
+    func captureAndCorrect() {
+        guard let obs = latestObservation, let buf = latestPixelBuffer else { return }
+        let ciImage = CIImage(cvPixelBuffer: buf)
+        guard let corrected = PerspectiveCorrector.correct(
+            image: ciImage,
+            observation: obs,
+            outputSize: CGSize(width: 512, height: 512)
+        ) else { return }
+        capturedImage = corrected
+    }
+
+    private func handleRectangles(_ request: VNRequest, _ error: Error?) {
+        guard let results = request.results as? [VNRectangleObservation],
+              let best = results.first else {
+            Task { @MainActor in isStable = false; stableCount = 0 }
+            return
+        }
+        let vr = normalizedRect(best)
+        Task { @MainActor in
+            detectedRect = vr
+            // Stability check: rect hasn't moved much for N frames
+            if let last = lastRect, rectsClose(last, vr) {
+                stableCount += 1
+                isStable = stableCount >= stableFrames
+            } else {
+                stableCount = 0
+                isStable = false
+            }
+            lastRect = vr
+        }
+    }
+
+    private func normalizedRect(_ obs: VNRectangleObservation) -> CGRect {
+        // Vision [0,1] bottom-left origin → UIKit top-left origin
+        let invY = 1.0 - obs.boundingBox.origin.y - obs.boundingBox.height
+        return CGRect(
+            x: obs.boundingBox.origin.x * viewSize.width,
+            y: invY * viewSize.height,
+            width: obs.boundingBox.width * viewSize.width,
+            height: obs.boundingBox.height * viewSize.height
+        )
+    }
+
+    private func rectsClose(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.midX - b.midX) < 15 && abs(a.midY - b.midY) < 15 &&
+        abs(a.width - b.width) < 30 && abs(a.height - b.height) < 30
+    }
+}
+
+extension EdgeDetectionModel: AVCaptureVideoDataOutputSampleBufferDelegate {
+    func captureOutput(_ output: AVCaptureOutput,
+                      didOutput sampleBuffer: CMSampleBuffer,
+                      from connection: AVCaptureConnection) {
+        guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        latestPixelBuffer = pb
+        try? VNImageRequestHandler(cvPixelBuffer: pb, orientation: .up, options: [:])
+            .perform([rectRequest])
+    }
+}
+```
+
+- [ ] **Step 3: Implement PerspectiveCorrector**
+
+```swift
+// PerspectiveCorrector.swift
+import UIKit
+import CoreImage
+
+struct PerspectiveCorrector {
+    /// Extract a flat, perspective-corrected tile texture.
+    static func correct(
+        image: CIImage,
+        observation: VNRectangleObservation,
+        outputSize: CGSize = CGSize(width: 512, height: 512)
+    ) -> UIImage? {
+        guard let filter = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+        filter.setValue(image, forKey: kCIInputImageKey)
+        filter.setValue(CIVector(cgPoint: observation.topLeft), forKey: "inputTopLeft")
+        filter.setValue(CIVector(cgPoint: observation.topRight), forKey: "inputTopRight")
+        filter.setValue(CIVector(cgPoint: observation.bottomLeft), forKey: "inputBottomLeft")
+        filter.setValue(CIVector(cgPoint: observation.bottomRight), forKey: "inputBottomRight")
+        guard let corrected = filter.outputImage else { return nil }
+        // Scale to output
+        let scaleX = outputSize.width / corrected.extent.width
+        let scaleY = outputSize.height / corrected.extent.height
+        let scaled = corrected.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+        let ctx = CIContext()
+        guard let cg = ctx.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+}
+```
+
+- [ ] **Step 4: Save texture and update TileGroup**
+
+```swift
+// In the calling view after onCapture:
+func saveTexture(image: UIImage, tileGroupId: String, tileGroupRepo: TileGroupRepository) async {
+    let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("textures")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let fileURL = dir.appendingPathComponent("\(tileGroupId).png")
+    try? image.pngData()?.write(to: fileURL)
+
+    // Update tile group in DB
+    if var tg = try? await tileGroupRepo.getById(id: tileGroupId) {
+        let updated = TileGroup(
+            id: tg.id, projectId: tg.projectId, name: tg.name,
+            tileWidth: tg.tileWidth, tileHeight: tg.tileHeight,
+            texturePath: fileURL.path, source: TileSource.captured
+        )
+        try? await tileGroupRepo.insert(tileGroup: updated)
+    }
+}
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add iosApp/iosApp/Views/EdgeDetectionCameraView.swift \
+        iosApp/iosApp/Views/EdgeDetectionModel.swift \
+        iosApp/iosApp/Views/PerspectiveCorrector.swift \
+        iosApp/iosApp/Views/CameraView.swift
+git commit -m "feat(ios): edge detection tile scanner with Vision rectangle detection + perspective correction"
+```
+
+---
+
+### Task 22: Edge Detection — Android
+
+- [ ] **Step 1: Add OpenCV dependency**
+
+```kotlin
+// androidApp/build.gradle.kts — add:
+dependencies {
+    implementation("org.bytedeco:opencv:4.8.0-1.5.9")
+    // or: implementation("com.quickbirdstudios:opencv:4.5.3.0")
+}
+```
+
+- [ ] **Step 2: Implement EdgeDetectionScreen with CameraX**
+
+```kotlin
+// EdgeDetectionScreen.kt
+@Composable
+fun EdgeDetectionScreen(
+    onCapture: (Bitmap) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var detectedRect by remember { mutableStateOf<Rect?>(null) }
+    var isStable by remember { mutableStateOf(false) }
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        // Camera preview
+        AndroidView(
+            factory = { ctx ->
+                PreviewView(ctx).also { pv ->
+                    val provider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build()
+                        .also { it.setSurfaceProvider(pv.surfaceProvider) }
+                    val analysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                    analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { image ->
+                        val rect = EdgeDetector.detectRectangle(image.toBitmap())
+                        image.close()
+                        rect?.let { r ->
+                            // Stability check
+                        }
+                    }
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview, analysis)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Overlay + controls (same layout as iOS)
+        EdgeOverlay(detectedRect = detectedRect)
+        CaptureControls(isStable = isStable, onCapture = {
+            detectedRect?.let { rect ->
+                // captureAndCorrect(rect) { onCapture(it) }
+            }
+        }, onDismiss = onDismiss)
+    }
+}
+```
+
+- [ ] **Step 3: Implement OpenCV edge detection**
+
+```kotlin
+// EdgeDetector.kt
+object EdgeDetector {
+    fun detectRectangle(bitmap: Bitmap): RectF? {
+        val src = Mat(); Utils.bitmapToMat(bitmap, src)
+        val gray = Mat(); Imgproc.cvtColor(src, gray, Imgproc.COLOR_RGBA2GRAY)
+        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+        val edges = Mat(); Imgproc.Canny(gray, edges, 75.0, 200.0)
+
+        val contours = mutableListOf<MatOfPoint>()
+        Imgproc.findContours(edges, contours, Mat(),
+            Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+        var best: Rect? = null; var maxArea = 0.0
+        for (c in contours) {
+            val peri = Imgproc.arcLength(MatOfPoint2f(*c.toArray()), true)
+            val approx = MatOfPoint2f()
+            Imgproc.approxPolyDP(MatOfPoint2f(*c.toArray()), approx, 0.02 * peri, true)
+            if (approx.total() == 4L) {
+                val r = Imgproc.boundingRect(MatOfPoint(approx.toArray()))
+                if (r.area() > maxArea && r.area() > src.rows() * src.cols() * 0.15) {
+                    maxArea = r.area(); best = r
+                }
+            }
+        }
+        return best?.let { RectF(it.x.toFloat(), it.y.toFloat(),
+            (it.x + it.width).toFloat(), (it.y + it.height).toFloat()) }
+    }
+}
+```
+
+- [ ] **Step 4: Perspective correction + save**
+
+```kotlin
+// PerspectiveCorrector.kt
+object PerspectiveCorrector {
+    fun correct(source: Bitmap, corners: QuadCorners, outputSize: Int = 512): Bitmap {
+        val src = floatArrayOf(
+            corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y,
+            corners.br.x, corners.br.y, corners.bl.x, corners.bl.y)
+        val dst = floatArrayOf(0f, 0f, outputSize.toFloat(), 0f,
+            outputSize.toFloat(), outputSize.toFloat(), 0f, outputSize.toFloat())
+        val matrix = Matrix(); matrix.setPolyToPoly(src, 0, dst, 0, 4)
+        return Bitmap.createBitmap(outputSize, outputSize, Bitmap.Config.ARGB_8888).also {
+            Canvas(it).drawBitmap(source, matrix, Paint(Paint.ANTI_ALIAS_FLAG))
+        }
+    }
+}
+data class QuadCorners(val tl: PointF, val tr: PointF, val bl: PointF, val br: PointF)
+```
+
+Save to internal storage and update `TileGroup.texturePath` + `source = TileSource.CAPTURED`.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetectionScreen.kt \
+        androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetector.kt \
+        androidApp/src/main/java/com/hasu/tilelayout/ui/screens/PerspectiveCorrector.kt
+git commit -m "feat(android): edge detection tile scanner with OpenCV + CameraX"
+```
+
+---
+
+### Task 23: Shared Texture Storage Path
+
+- [ ] **Step 1: Add `expect` texture base directory to shared module**
+
+```kotlin
+// sharedLogic/src/commonMain/.../texture/TextureStorage.kt
+package com.hasu.tilelayout.texture
+
+expect fun textureBaseDirectory(): String
+
+object TextureStorage {
+    fun pathFor(tileGroupId: String): String =
+        "${textureBaseDirectory()}/$tileGroupId.png"
+}
+```
+
+- [ ] **Step 2: Platform actuals**
+
+iOS: `actual fun textureBaseDirectory(): String = NSSearchPathForDirectoriesInDomains(...) + "/textures"`
+Android: `actual fun textureBaseDirectory(): String = context.filesDir.absolutePath + "/textures"`
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "feat: shared TextureStorage helper for captured texture file paths"
+```
+
+---
+
+**Phase 10 complete.** 3 tasks: iOS edge detection (Vision + CIPerspectiveCorrection), Android edge detection (CameraX + OpenCV), and shared texture storage. The flow: open camera → detect rectangle in real-time → auto-stabilize when rect holds still → capture → perspective-correct to flat top-down image → save as PNG → update TileGroup.texturePath.
