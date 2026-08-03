@@ -8,9 +8,15 @@ struct CutListTabView: View {
 
     @State private var cutEntries: [CutEntry] = []
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var surfaceRepo: SurfaceRepository = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
-    lazy var layoutRepo: LayoutResultRepository = SqlDelightLayoutResultRepository(queries: db.tileLayoutDbQueries)
+    private let surfaceRepo: SurfaceRepository
+    private let layoutRepo: LayoutResultRepository
+
+    init(vm: IOSRoomEditorViewModel) {
+        self.vm = vm
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.surfaceRepo = SqlDelightSurfaceRepository(queries: database.tileLayoutDbQueries)
+        self.layoutRepo = SqlDelightLayoutResultRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         Group {
@@ -48,7 +54,6 @@ struct CutListTabView: View {
                 return
             }
 
-            // Build lookup maps
             var surfaceNames: [String: String] = [:]
             for surface in vm.surfaces {
                 surfaceNames[surface.id] = vm.displayName(for: surface)
@@ -58,7 +63,7 @@ struct CutListTabView: View {
             let cutTiles = result.tiles.filter { ($0 as? PlacedTile)?.isCut ?? false }
             for tile in cutTiles {
                 if let tile = tile as? PlacedTile, tileGroupNames[tile.tileGroupId] == nil {
-                    tileGroupNames[tile.tileGroupId] = tile.tileGroupId // Will be resolved below
+                    tileGroupNames[tile.tileGroupId] = tile.tileGroupId
                 }
             }
 
@@ -85,7 +90,6 @@ private struct CutEntrySection: View {
     var body: some View {
         Section {
             VStack(alignment: .leading, spacing: 8) {
-                // Header
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(entry.tileGroupName)
@@ -102,12 +106,10 @@ private struct CutEntrySection: View {
                         .foregroundStyle(.orange)
                 }
 
-                // Cut type
                 Label(entry.cutTypeDescription, systemImage: "scissors")
                     .font(.caption)
                     .foregroundStyle(.orange)
 
-                // Per-surface breakdown
                 ForEach(entry.locations as? [CutLocation] ?? [], id: \.surfaceId) { location in
                     HStack {
                         Text(location.surfaceName)
@@ -119,7 +121,6 @@ private struct CutEntrySection: View {
                     }
                 }
 
-                // Mini diagram (simple rectangle with marked cut edges)
                 cutDiagram
             }
             .padding(.vertical, 4)
@@ -132,7 +133,6 @@ private struct CutEntrySection: View {
             context.fill(Path(rect), with: .color(.orange.opacity(0.15)))
             context.stroke(Path(rect), with: .color(.orange.opacity(0.5)), lineWidth: 1)
 
-            // Mark cut edges
             let edges = entry.cutEdgesKey.split(separator: ",").map(String.init)
             for edge in edges {
                 let markerRect: CGRect
@@ -151,7 +151,6 @@ private struct CutEntrySection: View {
                 context.fill(Path(markerRect), with: .color(.red))
             }
 
-            // Draw tile dimensions text
             let label = "\(Int(entry.width))×\(Int(entry.height))"
             let text = Text(label).font(.system(size: 8)).foregroundColor(.orange)
             context.draw(text, at: CGPoint(x: rect.midX, y: rect.midY))

@@ -8,8 +8,13 @@ struct TileLibraryView: View {
     @State private var tileGroups: [TileGroup] = []
     @State private var showAdd = false
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
+    private let tileGroupRepo: TileGroupRepository
+
+    init(projectId: String) {
+        self.projectId = projectId
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.tileGroupRepo = SqlDelightTileGroupRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         Group {
@@ -25,9 +30,10 @@ struct TileLibraryView: View {
                         TileGroupRow(tileGroup: tg)
                     }
                     .onDelete { indexSet in
+                        let repo = tileGroupRepo
                         Task {
                             for idx in indexSet {
-                                try? await tileGroupRepo.delete(id: tileGroups[idx].id)
+                                try? await repo.delete(id: tileGroups[idx].id)
                             }
                             await load()
                         }
@@ -119,8 +125,15 @@ private struct AddTileGroupSheet: View {
     @State private var tileWidth: Double = 300
     @State private var tileHeight: Double = 200
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
+    private let tileGroupRepo: TileGroupRepository
+    private let typeId = TypeId()
+
+    init(projectId: String, onDismiss: @escaping () -> Void) {
+        self.projectId = projectId
+        self.onDismiss = onDismiss
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.tileGroupRepo = SqlDelightTileGroupRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         NavigationStack {
@@ -152,9 +165,11 @@ private struct AddTileGroupSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
+                        let repo = tileGroupRepo
+                        let tid = typeId
                         Task {
                             let tg = TileGroup(
-                                id: nil,
+                                id: tid.generate(prefix: "tg"),
                                 projectId: projectId,
                                 name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? "Tile" : name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -163,7 +178,7 @@ private struct AddTileGroupSheet: View {
                                 texturePath: nil,
                                 source: TileSource.imported
                             )
-                            try? await tileGroupRepo.insert(tileGroup: tg)
+                            try? await repo.insert(tileGroup: tg)
                             onDismiss()
                             dismiss()
                         }

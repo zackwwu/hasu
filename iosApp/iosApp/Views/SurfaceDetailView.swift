@@ -13,18 +13,23 @@ struct SurfaceDetailView: View {
     @State private var showRegionEditor = false
     @State private var selectedSTG: SurfaceTileGroup? = nil
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var surfaceRepo: SurfaceRepository = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
-    private lazy var tileGroupRepo: TileGroupRepository = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
-
     @State private var stgs: [SurfaceTileGroup] = []
     @State private var tileGroups: [TileGroup] = []
+
+    private let surfaceRepo: SurfaceRepository
+    private let tileGroupRepo: TileGroupRepository
+    private let roomRepo: RoomRepository
+    private let typeId = TypeId()
 
     init(surface: Surface, vm: IOSRoomEditorViewModel) {
         self.surface = surface
         self.vm = vm
         _selectedGroutColor = State(initialValue: surface.groutColor)
         _groutWidth = State(initialValue: surface.groutWidth)
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.surfaceRepo = SqlDelightSurfaceRepository(queries: database.tileLayoutDbQueries)
+        self.tileGroupRepo = SqlDelightTileGroupRepository(queries: database.tileLayoutDbQueries)
+        self.roomRepo = SqlDelightRoomRepository(queries: database.tileLayoutDbQueries)
     }
 
     var body: some View {
@@ -37,7 +42,7 @@ struct SurfaceDetailView: View {
         .task {
             await loadTileGroups()
         }
-        .onChange(of: selectedGroutColor) { _, newColor in
+        .onChange(of: selectedGroutColor) { _, _ in
             Task { await updateGrout() }
         }
         .onChange(of: groutWidth) { _, _ in
@@ -73,7 +78,6 @@ struct SurfaceDetailView: View {
 
     private var groutSection: some View {
         Section("Grout") {
-            // Color picker (3 circles)
             HStack(spacing: 16) {
                 ForEach([GroutColor.black, GroutColor.grey, GroutColor.white], id: \.self) { color in
                     Button {
@@ -95,7 +99,6 @@ struct SurfaceDetailView: View {
             }
             .padding(.vertical, 4)
 
-            // Width stepper
             Stepper("Width: \(Int(groutWidth)) mm", value: $groutWidth, in: 1...10, step: 1)
         }
     }
@@ -110,7 +113,6 @@ struct SurfaceDetailView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Add") {
-                        // Create default STG covering entire surface
                         Task { await addDefaultSTG() }
                     }
                 }
@@ -123,10 +125,11 @@ struct SurfaceDetailView: View {
                         }
                 }
                 .onDelete { indexSet in
+                    let repo = surfaceRepo
                     Task {
                         for idx in indexSet {
                             do {
-                                try await surfaceRepo.deleteSTG(id: stgs[idx].id)
+                                try await repo.deleteSTG(id: stgs[idx].id)
                             } catch {
                                 print("Delete STG failed: \(error)")
                             }
@@ -157,7 +160,6 @@ struct SurfaceDetailView: View {
     private func loadSTGs() async {
         do {
             stgs = try await surfaceRepo.getSTGsBySurface(surfaceId: surface.id)
-            // Load tile group details for each STG
             var tgs: [TileGroup] = []
             for stg in stgs {
                 if let tg = try await tileGroupRepo.getById(id: stg.tileGroupId) {
@@ -171,13 +173,10 @@ struct SurfaceDetailView: View {
     }
 
     private func addDefaultSTG() async {
-        // Default: first tile group from the project, or we need a tile group id
-        // For now, we create the STG covering the full surface with the first available tile group
-        guard let room = try? await SqlDelightRoomRepository(queries: db.tileLayoutDbQueries).getById(id: surface.roomId),
+        guard let room = try? await roomRepo.getById(id: surface.roomId),
               let projectTileGroups = try? await tileGroupRepo.getByProject(projectId: room.projectId),
-              let firstTG = projectTileGroups.first ?? nil
+              let firstTG = projectTileGroups.first
         else {
-            // No tile groups exist yet — surface detail just shows "no tile groups"
             return
         }
 
@@ -186,8 +185,9 @@ struct SurfaceDetailView: View {
             width: surface.width,
             height: surface.height
         )
+        let tid = typeId
         let stg = SurfaceTileGroup(
-            id: TypeId.generate(prefix: "stg"),
+            id: tid.generate(prefix: "stg"),
             surfaceId: surface.id,
             tileGroupId: firstTG.id,
             region: region,
@@ -217,9 +217,8 @@ struct SurfaceDetailView: View {
         )
         do {
             try await surfaceRepo.insert(surface: updated)
-            // Recompute layout with new grout
             try await vm.load(roomId: surface.roomId)
-            try await vm.computeLayoutForSurface(surfaceId: surface.id)
+            await vm.computeLayoutForSurface(surfaceId: surface.id)
         } catch {
             print("Update grout failed: \(error)")
         }

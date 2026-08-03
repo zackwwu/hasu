@@ -20,22 +20,13 @@ struct IsometricCanvas {
         let ordered = projection.orderSurfaces(surfaces: surfaces, viewAngle: Int32(viewAngle)) as? [Surface] ?? surfaces
 
         for surface in ordered {
-            let corners = projection.projectSurfaceCorners(
-                surface: surface,
-                viewAngle: Int32(viewAngle),
-                originX: originX,
-                originY: originY
-            ) as? [IsometricProjectionScreenPoint] ?? []
-
-            guard corners.count >= 4 else { continue }
-
-            let cgPoints = corners.map { CGPoint(x: $0.x, y: $0.y) }
+            let corners = projectCorners(projection: projection, surface: surface, viewAngle: viewAngle, originX: originX, originY: originY, count: 4)
 
             // Draw surface polygon
             var path = Path()
-            path.move(to: cgPoints[0])
-            for i in 1..<cgPoints.count {
-                path.addLine(to: cgPoints[i])
+            path.move(to: corners[0])
+            for i in 1..<corners.count {
+                path.addLine(to: corners[i])
             }
             path.closeSubpath()
 
@@ -43,22 +34,42 @@ struct IsometricCanvas {
             let fillColor = surfaceFillColor(surface: surface, isSelected: isSelected)
             context.fill(path, with: .color(fillColor))
 
-            // Selected surface gets a thicker border
             let strokeWidth: CGFloat = isSelected ? 3.0 : 1.0
             let strokeColor: Color = isSelected ? .blue : .gray.opacity(0.5)
             context.stroke(path, with: .color(strokeColor), lineWidth: strokeWidth)
 
             // Draw surface label at centroid
-            let centroid = CGPoint(
-                x: cgPoints.map(\.x).reduce(0, +) / CGFloat(cgPoints.count),
-                y: cgPoints.map(\.y).reduce(0, +) / CGFloat(cgPoints.count)
-            )
+            let cx = corners.map(\.x).reduce(0, +) / CGFloat(corners.count)
+            let cy = corners.map(\.y).reduce(0, +) / CGFloat(corners.count)
             let label = surfaceLabel(surface: surface)
-            let text = Text(label)
-                .font(.system(size: 9))
-                .foregroundColor(.primary)
-            context.draw(text, at: centroid)
+            let text = Text(label).font(.system(size: 9)).foregroundColor(.primary)
+            context.draw(text, at: CGPoint(x: cx, y: cy))
         }
+    }
+
+    /// Project a surface's corners to screen points using the shared projection.
+    private static func projectCorners(
+        projection: IsometricProjection,
+        surface: Surface,
+        viewAngle: Int,
+        originX: Double,
+        originY: Double,
+        count: Int
+    ) -> [CGPoint] {
+        let corners = projection.projectSurfaceCorners(
+            surface: surface,
+            viewAngle: Int32(viewAngle),
+            originX: originX,
+            originY: originY
+        ) as? [Any] ?? []
+
+        var points: [CGPoint] = []
+        for corner in corners {
+            if let pt = corner as? IsometricProjection.ScreenPoint {
+                points.append(CGPoint(x: pt.x, y: pt.y))
+            }
+        }
+        return points
     }
 
     private static func surfaceFillColor(surface: Surface, isSelected: Bool) -> Color {

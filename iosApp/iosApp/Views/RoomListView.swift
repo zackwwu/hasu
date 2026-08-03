@@ -8,8 +8,13 @@ struct RoomListView: View {
     @State private var rooms: [Room] = []
     @State private var showAddRoom = false
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    private let roomRepo: RoomRepository
+
+    init(projectId: String) {
+        self.projectId = projectId
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.roomRepo = SqlDelightRoomRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         Group {
@@ -36,9 +41,10 @@ struct RoomListView: View {
                         }
                     }
                     .onDelete { indexSet in
+                        let repo = roomRepo
                         Task {
                             for idx in indexSet {
-                                try? await roomRepo.delete(id: rooms[idx].id)
+                                try? await repo.delete(id: rooms[idx].id)
                             }
                             await load()
                         }
@@ -82,8 +88,15 @@ private struct AddRoomSheet: View {
     @State private var depth: Double = 4000
     @State private var height: Double = 2400
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    private let roomRepo: RoomRepository
+    private let typeId = TypeId()
+
+    init(projectId: String, onDismiss: @escaping () -> Void) {
+        self.projectId = projectId
+        self.onDismiss = onDismiss
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.roomRepo = SqlDelightRoomRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         NavigationStack {
@@ -122,9 +135,11 @@ private struct AddRoomSheet: View {
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Add") {
+                        let repo = roomRepo
+                        let tid = typeId
                         Task {
                             let room = Room(
-                                id: TypeId.generate(prefix: "rm"),
+                                id: tid.generate(prefix: "rm"),
                                 projectId: projectId,
                                 name: name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                                     ? "Room" : name.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -132,7 +147,7 @@ private struct AddRoomSheet: View {
                                 depth: depth,
                                 height: height
                             )
-                            try? await roomRepo.insert(room: room)
+                            try? await repo.insert(room: room)
                             onDismiss()
                             dismiss()
                         }

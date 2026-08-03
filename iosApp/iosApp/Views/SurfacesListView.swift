@@ -8,8 +8,16 @@ struct SurfacesListView: View {
 
     @State private var room: Room? = nil
 
-    lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    lazy var roomRepo: RoomRepository = SqlDelightRoomRepository(queries: db.tileLayoutDbQueries)
+    private let db: TileLayoutDb
+    private let roomRepo: RoomRepository
+
+    init(vm: IOSRoomEditorViewModel, roomId: String) {
+        self.vm = vm
+        self.roomId = roomId
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.db = database
+        self.roomRepo = SqlDelightRoomRepository(queries: database.tileLayoutDbQueries)
+    }
 
     var body: some View {
         Group {
@@ -105,7 +113,6 @@ struct SurfacesListView: View {
             for surface in generated {
                 try await surfaceRepo.insert(surface: surface)
             }
-            // Reload surfaces into the shared VM
             try await vm.load(roomId: roomId)
             vm.selectSurface(generated.first?.id)
         } catch {

@@ -15,8 +15,7 @@ struct RegionEditorView: View {
     @State private var regionH: Double
     @State private var validationError: String? = nil
 
-    private lazy var db = DatabaseProvider.shared.createTileLayoutDb()
-    private lazy var surfaceRepo: SurfaceRepository = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
+    private let surfaceRepo: SurfaceRepository
 
     init(stg: SurfaceTileGroup, surface: Surface) {
         self.stg = stg
@@ -25,12 +24,14 @@ struct RegionEditorView: View {
         _regionY = State(initialValue: stg.region.y)
         _regionW = State(initialValue: stg.region.width)
         _regionH = State(initialValue: stg.region.height)
+        let database = DatabaseProvider.shared.createTileLayoutDb()
+        self.surfaceRepo = SqlDelightSurfaceRepository(queries: database.tileLayoutDbQueries)
     }
 
     var body: some View {
         NavigationStack {
             Form {
-                Section("Region") {
+                Section {
                     HStack {
                         LabeledContent("X") {
                             TextField("X", value: $regionX, format: .number)
@@ -69,11 +70,13 @@ struct RegionEditorView: View {
                 }
 
                 Section {
-                    Button("Validate & Save") {
-                        validateAndSave()
+                    Button {
+                        Task { await validateAndSave() }
+                    } label: {
+                        Text("Validate & Save")
+                            .frame(maxWidth: .infinity)
+                            .fontWeight(.semibold)
                     }
-                    .frame(maxWidth: .infinity)
-                    .fontWeight(.semibold)
                 }
             }
             .navigationTitle("Edit Region")
@@ -86,10 +89,9 @@ struct RegionEditorView: View {
         }
     }
 
-    private func validateAndSave() {
+    private func validateAndSave() async {
         let newRegion = RegionRect(x: regionX, y: regionY, width: regionW, height: regionH)
 
-        // Basic bounds check
         if regionX < 0 || regionY < 0 || regionX + regionW > surface.width || regionY + regionH > surface.height {
             validationError = "Region extends outside surface bounds (\(Int(surface.width)) × \(Int(surface.height)))."
             return
@@ -100,9 +102,9 @@ struct RegionEditorView: View {
             return
         }
 
-        // Use RegionValidator from shared module
         let validator = RegionValidator()
-        let existingSTGs = (try? surfaceRepo.getSTGsBySurface(surfaceId: surface.id)) ?? []
+        let repo = surfaceRepo
+        let existingSTGs = (try? await repo.getSTGsBySurface(surfaceId: surface.id)) ?? []
         let result = validator.validate(
             newRegion: newRegion,
             existingRegions: existingSTGs,
@@ -122,13 +124,11 @@ struct RegionEditorView: View {
                 offsetY: stg.offsetY,
                 locked: stg.locked
             )
-            Task {
-                do {
-                    try await surfaceRepo.updateSTG(stg: updated)
-                    dismiss()
-                } catch {
-                    validationError = "Save failed: \(error.localizedDescription)"
-                }
+            do {
+                try await repo.updateSTG(stg: updated)
+                dismiss()
+            } catch {
+                validationError = "Save failed: \(error.localizedDescription)"
             }
         } else {
             let messages = result.errors as? [RegionValidationError] ?? []
@@ -147,7 +147,6 @@ struct HelpDiagramView: View {
                     .font(.title2)
                     .fontWeight(.bold)
 
-                // 3D coordinate system diagram
                 coordinateDiagram
 
                 Divider()
@@ -184,7 +183,6 @@ struct HelpDiagramView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Surfaces")
                         .font(.headline)
-
                     Text("• **Front Wall:** rotation 0°, positioned at z=0")
                     Text("• **Back Wall:** rotation 180°, positioned at z=roomDepth")
                     Text("• **Left Wall:** rotation 90°, positioned at x=0 (spans Z)")
@@ -197,13 +195,11 @@ struct HelpDiagramView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Lock Propagation")
                         .font(.headline)
-
                     Text("When dragging tiles on one surface while others are locked:")
                     Text("• **Floor → Floor:** Both axes propagate")
                     Text("• **Wall → Wall (parallel):** Both axes propagate")
                     Text("• **Wall → Wall (perpendicular):** Only Y axis propagates")
                     Text("• **Wall ↔ Floor:** No propagation")
-                        .padding(.top, 4)
                 }
             }
             .padding()
@@ -219,44 +215,26 @@ struct HelpDiagramView: View {
 
             VStack(spacing: 16) {
                 HStack(spacing: 40) {
-                    Text("Front Wall\n(0°)")
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(8)
-                        .background(Color.blue.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                    Text("Back Wall\n(180°)")
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(8)
-                        .background(Color.blue.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    diagramBox("Front Wall\n(0°)", color: .blue)
+                    diagramBox("Back Wall\n(180°)", color: .blue)
                 }
 
                 HStack(spacing: 40) {
-                    Text("Left Wall\n(90°)")
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(8)
-                        .background(Color.green.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                    Text("Floor")
-                        .font(.caption)
-                        .padding(8)
-                        .background(Color.brown.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
-
-                    Text("Right Wall\n(270°)")
-                        .font(.caption)
-                        .multilineTextAlignment(.center)
-                        .padding(8)
-                        .background(Color.green.opacity(0.15))
-                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                    diagramBox("Left Wall\n(90°)", color: .green)
+                    diagramBox("Floor", color: .brown)
+                    diagramBox("Right Wall\n(270°)", color: .green)
                 }
             }
         }
+    }
+
+    private func diagramBox(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.caption)
+            .multilineTextAlignment(.center)
+            .padding(8)
+            .background(color.opacity(0.15))
+            .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
     private func diagramItem(icon: String, color: Color, title: String, description: String) -> some View {
