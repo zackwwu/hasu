@@ -1,4 +1,5 @@
 import SwiftUI
+import SharedLogic
 
 /// 3D isometric canvas drawing helpers using shared IsometricProjection math.
 struct IsometricCanvas {
