@@ -25,7 +25,7 @@ struct RoomEditorView: View {
             case 0:
                 SurfacesListView(vm: vm, roomId: roomId)
             case 1:
-                LayoutTabStub(vm: vm)
+                LayoutTabView(vm: vm)
             case 2:
                 PreviewTabStub(vm: vm)
             case 3:
