@@ -2,8 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     var body: some View {
-        Text("Tile Layout")
-            .font(.title)
+        HomeView()
     }
 }
 
