@@ -27,9 +27,9 @@ struct RoomEditorView: View {
             case 1:
                 LayoutTabView(vm: vm)
             case 2:
-                PreviewTabStub(vm: vm)
+                PreviewTabView(vm: vm)
             case 3:
-                CutListTabStub(vm: vm)
+                CutListTabView(vm: vm)
             default:
                 EmptyView()
             }
