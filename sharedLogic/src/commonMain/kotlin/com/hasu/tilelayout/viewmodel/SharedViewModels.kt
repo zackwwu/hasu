@@ -14,11 +14,13 @@ import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 // ──────────────────────────────────────────────
 // ProjectListViewModel
@@ -79,6 +81,8 @@ class RoomEditorViewModel(
     private val _undoBuffer = MutableStateFlow<Map<String, Pair<Double, Double>>?>(null)
     val undoBuffer: StateFlow<Map<String, Pair<Double, Double>>?> = _undoBuffer
 
+    private var dragLockedIds: Set<String> = emptySet()
+
     private val _currentTiles = MutableStateFlow<List<PlacedTile>>(emptyList())
     val currentTiles: StateFlow<List<PlacedTile>> = _currentTiles
 
@@ -117,7 +121,8 @@ class RoomEditorViewModel(
 
     suspend fun onDragStart() {
         val selectedId = _selectedSurfaceId.value ?: return
-        val affectedIds = setOf(selectedId) + _lockedSurfaceIds.value
+        dragLockedIds = _lockedSurfaceIds.value
+        val affectedIds = setOf(selectedId) + dragLockedIds
         val priors = mutableMapOf<String, Pair<Double, Double>>()
 
         for (sid in affectedIds) {
@@ -136,13 +141,14 @@ class RoomEditorViewModel(
 
         applyOffset(selectedId, dx, dy)
 
-        for (lockedId in _lockedSurfaceIds.value) {
+        for (lockedId in dragLockedIds) {
             val locked = _surfaces.value.find { it.id == lockedId } ?: continue
             val (propDx, propDy) = propagateDelta(selected, locked, dx, dy)
             if (propDx != 0.0 || propDy != 0.0) {
                 applyOffset(lockedId, propDx, propDy)
             }
         }
+        dragLockedIds = emptySet()
     }
 
     private fun normalizedRotationBucket(rotation: Double): Int {
@@ -191,7 +197,7 @@ class RoomEditorViewModel(
         }
     }
 
-    fun flushPendingLayouts() {
+    fun cancelPendingLayouts() {
         for ((_, job) in pendingLayoutJobs) {
             job.cancel()
         }
@@ -261,16 +267,18 @@ class RoomEditorViewModel(
         val surface = surfaceRepo.getById(surfaceId) ?: return
         val stgs = surfaceRepo.getSTGsBySurface(surfaceId)
 
-        val tiles = stgs.flatMap { stg ->
-            val tg = tileGroupRepo.getById(stg.tileGroupId) ?: return@flatMap emptyList<PlacedTile>()
-            LayoutEngine.compute(
-                region = stg.region,
-                tileGroup = tg,
-                groutWidth = surface.groutWidth,
-                pattern = stg.pattern,
-                offsetX = stg.offsetX,
-                offsetY = stg.offsetY,
-            )
+        val tiles = withContext(Dispatchers.Default) {
+            stgs.flatMap { stg ->
+                val tg = tileGroupRepo.getById(stg.tileGroupId) ?: return@flatMap emptyList<PlacedTile>()
+                LayoutEngine.compute(
+                    region = stg.region,
+                    tileGroup = tg,
+                    groutWidth = surface.groutWidth,
+                    pattern = stg.pattern,
+                    offsetX = stg.offsetX,
+                    offsetY = stg.offsetY,
+                )
+            }
         }
 
         val result = LayoutResult(surfaceId = surfaceId, tiles = tiles, stale = false)

@@ -51,8 +51,10 @@ class SqlDelightLayoutResultRepository(private val queries: TileLayoutDbQueries)
     }
 
     override suspend fun delete(id: String) {
-        queries.deleteTilesByLayoutResult(id)
-        queries.deleteLayoutResult(id)
+        queries.transaction {
+            queries.deleteTilesByLayoutResult(id)
+            queries.deleteLayoutResult(id)
+        }
     }
 }
 
