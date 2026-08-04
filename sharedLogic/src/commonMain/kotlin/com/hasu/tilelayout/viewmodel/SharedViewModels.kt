@@ -13,8 +13,12 @@ import com.hasu.tilelayout.models.Project
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 // ──────────────────────────────────────────────
 // ProjectListViewModel
@@ -51,7 +55,13 @@ class RoomEditorViewModel(
     private val surfaceRepo: SurfaceRepository,
     private val tileGroupRepo: TileGroupRepository,
     private val layoutRepo: LayoutResultRepository,
+    private val scope: CoroutineScope,
+    private val debounceMs: Long = LAYOUT_DEBOUNCE_MS,
 ) {
+    companion object {
+        const val LAYOUT_DEBOUNCE_MS = 100L
+    }
+
     // -- StateFlows --
 
     private val _surfaces = MutableStateFlow<List<Surface>>(emptyList())
@@ -63,35 +73,30 @@ class RoomEditorViewModel(
     private val _viewAngle = MutableStateFlow(0)
     val viewAngle: StateFlow<Int> = _viewAngle
 
-    /** Transient set of surface ids whose tile offsets move in lockstep with the selected surface. */
     private val _lockedSurfaceIds = MutableStateFlow<Set<String>>(emptySet())
     val lockedSurfaceIds: StateFlow<Set<String>> = _lockedSurfaceIds
 
-    /**
-     * Snapshot of STG offsets before a drag begins.
-     * Map key = stgId, value = (offsetX, offsetY).
-     * Single-level undo — set to null after undo is consumed.
-     */
     private val _undoBuffer = MutableStateFlow<Map<String, Pair<Double, Double>>?>(null)
     val undoBuffer: StateFlow<Map<String, Pair<Double, Double>>?> = _undoBuffer
 
-    /** Tiles currently displayed for the selected surface. */
     private val _currentTiles = MutableStateFlow<List<PlacedTile>>(emptyList())
     val currentTiles: StateFlow<List<PlacedTile>> = _currentTiles
+
+    private val pendingLayoutJobs = mutableMapOf<String, Job>()
 
     // -- Public API --
 
     suspend fun loadSurfaces(roomId: String) {
         _surfaces.value = surfaceRepo.getByRoom(roomId)
-        // Also load layout for the currently selected surface if any
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
     }
 
-    fun selectSurface(id: String?) {
+    suspend fun selectSurface(id: String?) {
         _selectedSurfaceId.value = id
-        // When selection changes, reload tiles for the new surface
         if (id != null) {
-            // Actual reload happens via coroutine in platform layer
+            loadLayoutForSurface(id)
+        } else {
+            _currentTiles.value = emptyList()
         }
     }
 
@@ -110,10 +115,6 @@ class RoomEditorViewModel(
 
     // -- Drag / Offset --
 
-    /**
-     * Snapshot current offsets for the selected surface and all locked surfaces
-     * before a drag begins. Stored in [_undoBuffer] for single-level undo.
-     */
     suspend fun onDragStart() {
         val selectedId = _selectedSurfaceId.value ?: return
         val affectedIds = setOf(selectedId) + _lockedSurfaceIds.value
@@ -129,20 +130,12 @@ class RoomEditorViewModel(
         _undoBuffer.value = priors
     }
 
-    /**
-     * Apply a drag offset to the selected surface with lock propagation.
-     *
-     * @param dx horizontal displacement in surface-local units
-     * @param dy vertical displacement in surface-local units
-     */
     suspend fun onDragEnd(dx: Double, dy: Double) {
         val selectedId = _selectedSurfaceId.value ?: return
         val selected = _surfaces.value.find { it.id == selectedId } ?: return
 
-        // Apply to the selected surface
         applyOffset(selectedId, dx, dy)
 
-        // Propagate to locked surfaces using axis-aware rules
         for (lockedId in _lockedSurfaceIds.value) {
             val locked = _surfaces.value.find { it.id == lockedId } ?: continue
             val (propDx, propDy) = propagateDelta(selected, locked, dx, dy)
@@ -152,13 +145,11 @@ class RoomEditorViewModel(
         }
     }
 
-    /**
-     * Axis-aware lock propagation per spec:
-     * - Floor → Floor : both axes pass through
-     * - Wall → Wall (parallel) : dx + dy both pass through
-     * - Wall → Wall (non-parallel) : only dy (vertical) passes through
-     * - Wall ↔ Floor : no propagation (MVP limitation)
-     */
+    private fun normalizedRotationBucket(rotation: Double): Int {
+        val intRot = rotation.toInt()
+        return ((intRot % 180) + 180) % 180
+    }
+
     private fun propagateDelta(
         source: Surface,
         target: Surface,
@@ -169,11 +160,10 @@ class RoomEditorViewModel(
             return Pair(dx, dy)
         }
         if (source.type == SurfaceType.WALL && target.type == SurfaceType.WALL) {
-            val parallel =
-                (source.position.rotation.toInt() % 180) == (target.position.rotation.toInt() % 180)
+            val parallel = normalizedRotationBucket(source.position.rotation) ==
+                normalizedRotationBucket(target.position.rotation)
             return Pair(if (parallel) dx else 0.0, dy)
         }
-        // Wall ↔ Floor: no propagation
         return Pair(0.0, 0.0)
     }
 
@@ -187,28 +177,82 @@ class RoomEditorViewModel(
                 )
             )
         }
-        computeLayout(surfaceId)
+        scheduleLayoutCompute(surfaceId)
+    }
+
+    // -- Debounced Layout Scheduling --
+
+    private fun scheduleLayoutCompute(surfaceId: String) {
+        pendingLayoutJobs[surfaceId]?.cancel()
+        pendingLayoutJobs[surfaceId] = scope.launch {
+            delay(debounceMs)
+            computeLayout(surfaceId)
+            pendingLayoutJobs.remove(surfaceId)
+        }
+    }
+
+    fun flushPendingLayouts() {
+        for ((_, job) in pendingLayoutJobs) {
+            job.cancel()
+        }
+        pendingLayoutJobs.clear()
     }
 
     // -- Undo --
 
-    /** Consume the undo buffer. Caller should have captured [_undoBuffer.value] before calling. */
-    fun undo() {
+    suspend fun undo() {
+        val priors = _undoBuffer.value ?: return
         _undoBuffer.value = null
-    }
 
-    /**
-     * Restore STG offsets from a previously captured undo buffer.
-     * Called by the platform layer after [undo] has been invoked.
-     */
-    suspend fun undoRestore(priors: Map<String, Pair<Double, Double>>) {
+        val affectedSurfaceIds = mutableSetOf<String>()
         for ((stgId, offset) in priors) {
             val stg = surfaceRepo.getSTGById(stgId) ?: continue
+            affectedSurfaceIds.add(stg.surfaceId)
             surfaceRepo.updateSTG(
                 stg.copy(offsetX = offset.first, offsetY = offset.second)
             )
         }
-        _selectedSurfaceId.value?.let { computeLayout(it) }
+
+        for (surfaceId in affectedSurfaceIds) {
+            cancelPendingLayout(surfaceId)
+            computeLayout(surfaceId)
+        }
+    }
+
+    // -- Reset --
+
+    suspend fun resetToAuto(surfaceId: String) {
+        val stgs = surfaceRepo.getSTGsBySurface(surfaceId)
+        for (stg in stgs) {
+            surfaceRepo.updateSTG(stg.copy(offsetX = 0.0, offsetY = 0.0))
+        }
+        cancelPendingLayout(surfaceId)
+        computeLayout(surfaceId)
+        if (surfaceId == _selectedSurfaceId.value) {
+            loadLayoutForSurface(surfaceId)
+        }
+    }
+
+    suspend fun snapToCenter(surfaceId: String) {
+        val surface = surfaceRepo.getById(surfaceId) ?: return
+        val stgs = surfaceRepo.getSTGsBySurface(surfaceId)
+        for (stg in stgs) {
+            val tg = tileGroupRepo.getById(stg.tileGroupId) ?: continue
+            val tileW = tg.tileWidth + surface.groutWidth
+            val tileH = tg.tileHeight + surface.groutWidth
+            val centeredX = (stg.region.width % tileW) / 2.0
+            val centeredY = (stg.region.height % tileH) / 2.0
+            surfaceRepo.updateSTG(stg.copy(offsetX = centeredX, offsetY = centeredY))
+        }
+        cancelPendingLayout(surfaceId)
+        computeLayout(surfaceId)
+        if (surfaceId == _selectedSurfaceId.value) {
+            loadLayoutForSurface(surfaceId)
+        }
+    }
+
+    private fun cancelPendingLayout(surfaceId: String) {
+        pendingLayoutJobs.remove(surfaceId)?.cancel()
     }
 
     // -- Layout computation --
@@ -232,13 +276,11 @@ class RoomEditorViewModel(
         val result = LayoutResult(surfaceId = surfaceId, tiles = tiles, stale = false)
         layoutRepo.save(result)
 
-        // Update current tiles if this is the selected surface
         if (surfaceId == _selectedSurfaceId.value) {
             _currentTiles.value = tiles
         }
     }
 
-    /** Load cached layout tiles for a surface without recomputing. */
     private suspend fun loadLayoutForSurface(surfaceId: String) {
         val result = layoutRepo.getBySurface(surfaceId)
         _currentTiles.value = result?.tiles ?: emptyList()
@@ -246,12 +288,6 @@ class RoomEditorViewModel(
 
     // -- 3D Hit Testing --
 
-    /**
-     * Find which surface was tapped at the given screen coordinates.
-     * Uses painter's algorithm in reverse (front-to-back).
-     *
-     * @return the id of the tapped surface, or null if none matched
-     */
     fun hitTest(
         tapX: Double,
         tapY: Double,
@@ -262,7 +298,6 @@ class RoomEditorViewModel(
         val originY = canvasHeight * 0.6
 
         val ordered = IsometricProjection.orderSurfaces(_surfaces.value, _viewAngle.value)
-        // Check front-to-back: reverse of painter's order
         for (surface in ordered.reversed()) {
             val corners = IsometricProjection.projectSurfaceCorners(
                 surface, _viewAngle.value, originX, originY,
@@ -279,26 +314,8 @@ class RoomEditorViewModel(
 // Platform Texture Loader (expect declaration)
 // ──────────────────────────────────────────────
 
-/**
- * Platform-specific texture image loader.
- *
- * iOS: wraps UIImage (loaded from file path).
- * Android: wraps Bitmap (loaded via BitmapFactory).
- *
- * Each platform provides an `actual class TextureLoader` that
- * caches loaded textures in memory.
- */
 expect class TextureLoader() {
-    /**
-     * Load the texture image for [tileGroup] from disk.
-     * Returns `null` when no [TileGroup.texturePath] is set
-     * or the file cannot be decoded.
-     */
     suspend fun loadTexture(tileGroup: TileGroup): Any?
-
-    /** Remove a single texture from the in-memory cache. */
     fun evict(tileGroupId: String)
-
-    /** Clear the entire in-memory texture cache. */
     fun clear()
 }

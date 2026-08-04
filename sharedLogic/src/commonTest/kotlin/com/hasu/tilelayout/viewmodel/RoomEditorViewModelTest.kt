@@ -14,9 +14,13 @@ import com.hasu.tilelayout.models.SurfaceTileGroup
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 import com.hasu.tilelayout.models.TilePattern
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class RoomEditorViewModelTest {
 
     // ── Fake implementations ──
@@ -25,7 +29,10 @@ class RoomEditorViewModelTest {
         private val rooms = mutableListOf<Room>()
         override suspend fun getByProject(projectId: String) = rooms.filter { it.projectId == projectId }
         override suspend fun getById(id: String) = rooms.find { it.id == id }
-        override suspend fun insert(room: Room) { rooms.add(room) }
+        override suspend fun insert(room: Room) {
+            require(rooms.none { it.id == room.id }) { "Duplicate room id: ${room.id}" }
+            rooms.add(room)
+        }
         override suspend fun delete(id: String) { rooms.removeAll { it.id == id } }
     }
 
@@ -35,12 +42,18 @@ class RoomEditorViewModelTest {
 
         override suspend fun getByRoom(roomId: String) = surfaces.filter { it.roomId == roomId }
         override suspend fun getById(id: String) = surfaces.find { it.id == id }
-        override suspend fun insert(surface: Surface) { surfaces.add(surface) }
+        override suspend fun insert(surface: Surface) {
+            require(surfaces.none { it.id == surface.id }) { "Duplicate surface id: ${surface.id}" }
+            surfaces.add(surface)
+        }
         override suspend fun delete(id: String) { surfaces.removeAll { it.id == id } }
 
         override suspend fun getSTGsBySurface(surfaceId: String) = stgs.filter { it.surfaceId == surfaceId }
         override suspend fun getSTGById(id: String) = stgs.find { it.id == id }
-        override suspend fun insertSTG(stg: SurfaceTileGroup) { stgs.add(stg) }
+        override suspend fun insertSTG(stg: SurfaceTileGroup) {
+            require(stgs.none { it.id == stg.id }) { "Duplicate STG id: ${stg.id}" }
+            stgs.add(stg)
+        }
         override suspend fun updateSTG(stg: SurfaceTileGroup) {
             val idx = stgs.indexOfFirst { it.id == stg.id }
             if (idx >= 0) stgs[idx] = stg
@@ -52,7 +65,10 @@ class RoomEditorViewModelTest {
         val tileGroups = mutableListOf<TileGroup>()
         override suspend fun getByProject(projectId: String) = tileGroups.filter { it.projectId == projectId }
         override suspend fun getById(id: String) = tileGroups.find { it.id == id }
-        override suspend fun insert(tileGroup: TileGroup) { tileGroups.add(tileGroup) }
+        override suspend fun insert(tileGroup: TileGroup) {
+            require(tileGroups.none { it.id == tileGroup.id }) { "Duplicate tileGroup id: ${tileGroup.id}" }
+            tileGroups.add(tileGroup)
+        }
         override suspend fun delete(id: String) { tileGroups.removeAll { it.id == id } }
     }
 
@@ -73,7 +89,7 @@ class RoomEditorViewModelTest {
     private lateinit var layoutRepo: FakeLayoutResultRepository
     private lateinit var vm: RoomEditorViewModel
 
-    private fun setUp() {
+    private fun TestScope.setUp(debounceMs: Long = 0L) {
         surfaceRepo = FakeSurfaceRepository()
         tileGroupRepo = FakeTileGroupRepository()
         layoutRepo = FakeLayoutResultRepository()
@@ -82,6 +98,8 @@ class RoomEditorViewModelTest {
             surfaceRepo = surfaceRepo,
             tileGroupRepo = tileGroupRepo,
             layoutRepo = layoutRepo,
+            scope = this,
+            debounceMs = debounceMs,
         )
     }
 
@@ -117,68 +135,99 @@ class RoomEditorViewModelTest {
         tileGroupId: String = "tg1",
         offsetX: Double = 0.0,
         offsetY: Double = 0.0,
+        regionW: Double = 2000.0,
+        regionH: Double = 1200.0,
     ): SurfaceTileGroup = SurfaceTileGroup(
         id = id, surfaceId = surfaceId, tileGroupId = tileGroupId,
-        region = RegionRect(0.0, 0.0, 2000.0, 1200.0),
+        region = RegionRect(0.0, 0.0, regionW, regionH),
         offsetX = offsetX, offsetY = offsetY,
     )
 
-    // ── Tests ──
+    // ── Selection Tests ──
 
     @Test
-    fun selectSurfaceUpdatesSelectedId() {
-        // given: fresh VM
+    fun selectSurfaceUpdatesSelectedIdAndLoadsTiles() = runTest {
         setUp()
-        assertNull(vm.selectedSurfaceId.value)
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1")
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.computeLayout("s1")
 
-        // when: select a surface
         vm.selectSurface("s1")
 
-        // want: selectedSurfaceId updated
         assertEquals("s1", vm.selectedSurfaceId.value)
+        assertTrue(vm.currentTiles.value.isNotEmpty(), "selectSurface should load tiles")
     }
 
     @Test
-    fun rotateViewUpdatesViewAngle() {
-        // given: initial angle 0
+    fun selectSurfaceNullClearsTiles() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("s1", width = 903.0, height = 603.0))
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        vm.loadSurfaces("r1")
+        vm.computeLayout("s1")
+        vm.selectSurface("s1")
+        assertTrue(vm.currentTiles.value.isNotEmpty())
+
+        vm.selectSurface(null)
+
+        assertNull(vm.selectedSurfaceId.value)
+        assertTrue(vm.currentTiles.value.isEmpty(), "Deselecting should clear tiles")
+    }
+
+    // ── Rotation Tests ──
+
+    @Test
+    fun rotateViewUpdatesViewAngle() = runTest {
         setUp()
         assertEquals(0, vm.viewAngle.value)
 
-        // when: rotate ±90
         vm.rotateView(90)
         assertEquals(90, vm.viewAngle.value)
 
         vm.rotateView(-90)
         assertEquals(0, vm.viewAngle.value)
 
-        // want: wraps at 360
         vm.rotateView(360)
         assertEquals(0, vm.viewAngle.value)
     }
 
     @Test
-    fun toggleLockAddsAndRemovesSurfaceIds() {
-        // given: empty lock set
+    fun rotateViewHandlesNegativeAngles() = runTest {
+        setUp()
+        vm.rotateView(-90)
+        assertEquals(270, vm.viewAngle.value)
+
+        vm.rotateView(-180)
+        assertEquals(90, vm.viewAngle.value)
+    }
+
+    // ── Lock Tests ──
+
+    @Test
+    fun toggleLockAddsAndRemovesSurfaceIds() = runTest {
         setUp()
         assertTrue(vm.lockedSurfaceIds.value.isEmpty())
 
-        // when: toggle lock on s1
         vm.toggleLock("s1")
         assertTrue("s1" in vm.lockedSurfaceIds.value)
 
-        // when: toggle lock on s2
         vm.toggleLock("s2")
         assertEquals(2, vm.lockedSurfaceIds.value.size)
 
-        // when: toggle lock off on s1
         vm.toggleLock("s1")
         assertFalse("s1" in vm.lockedSurfaceIds.value)
         assertTrue("s2" in vm.lockedSurfaceIds.value)
     }
 
+    // ── Drag Tests ──
+
     @Test
-    fun dragStartSnapshotsOffsets() = runBlocking {
-        // given: 2 surfaces, s1 selected, s2 locked, each with STGs at known offsets
+    fun dragStartSnapshotsOffsets() = runTest {
         setUp()
         val s1 = createWallSurface(id = "s1", rotation = 0.0)
         val s2 = createWallSurface(id = "s2", rotation = 0.0)
@@ -191,10 +240,8 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
-        // when: drag starts
         vm.onDragStart()
 
-        // want: undoBuffer has offsets for both surfaces' STGs
         val buffer = vm.undoBuffer.value
         assertNotNull(buffer)
         assertEquals(2, buffer.size)
@@ -203,22 +250,18 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun dragStartWithoutSelectionReturnsEarly() = runBlocking {
-        // given: no surface selected
+    fun dragStartWithoutSelectionReturnsEarly() = runTest {
         setUp()
         surfaceRepo.surfaces.add(createWallSurface("s1"))
         vm.loadSurfaces("r1")
 
-        // when: drag starts with no selection
         vm.onDragStart()
 
-        // want: undoBuffer stays null (early return)
         assertNull(vm.undoBuffer.value)
     }
 
     @Test
-    fun dragEndAppliesOffsetToSelectedSurface() = runBlocking {
-        // given: s1 with STG at offset (10, 20)
+    fun dragEndAppliesOffsetToSelectedSurface() = runTest {
         setUp()
         val s1 = createWallSurface(id = "s1", width = 2000.0, height = 1200.0)
         val tg = createTileGroup("tg1", 300.0, 200.0)
@@ -228,20 +271,19 @@ class RoomEditorViewModelTest {
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
 
-        // when: drag ends with (5, -3)
         vm.onDragEnd(5.0, -3.0)
+        advanceTimeBy(1) // flush debounce (0ms in tests)
 
-        // want: STG offset updated
         val updated = surfaceRepo.getSTGById("stg1")
         assertNotNull(updated)
         assertEquals(15.0, updated.offsetX, 0.01)
         assertEquals(17.0, updated.offsetY, 0.01)
     }
 
+    // ── Lock Propagation Tests ──
+
     @Test
-    fun lockPropagationParallelWallsPassBothAxes() = runBlocking {
-        // given: s1 (rotation=0°) and s2 (rotation=180°) — parallel walls
-        //        s1 selected, s2 locked
+    fun lockPropagationParallelWallsPassBothAxes() = runTest {
         setUp()
         val s1 = createWallSurface(id = "s1", rotation = 0.0)
         val s2 = createWallSurface(id = "s2", rotation = 180.0)
@@ -256,10 +298,9 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
-        // when: drag (10, 5)
         vm.onDragEnd(10.0, 5.0)
+        advanceTimeBy(1)
 
-        // want: s2 also gets (10, 5) because walls are parallel
         val stg2 = surfaceRepo.getSTGById("stg2")
         assertNotNull(stg2)
         assertEquals(10.0, stg2.offsetX, 0.01, "Parallel walls: dx should propagate")
@@ -267,8 +308,32 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun lockPropagationPerpendicularWallsPassVerticalOnly() = runBlocking {
-        // given: s1 (rotation=0°) and s2 (rotation=90°) — perpendicular walls
+    fun lockPropagationParallelWallsWithNegativeRotation() = runTest {
+        setUp()
+        val s1 = createWallSurface(id = "s1", rotation = -45.0)
+        val s2 = createWallSurface(id = "s2", rotation = 135.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.addAll(listOf(s1, s2))
+        surfaceRepo.stgs.addAll(listOf(
+            createSTG("stg1", "s1", "tg1", offsetX = 0.0, offsetY = 0.0),
+            createSTG("stg2", "s2", "tg1", offsetX = 0.0, offsetY = 0.0),
+        ))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+        vm.toggleLock("s2")
+
+        vm.onDragEnd(7.0, 3.0)
+        advanceTimeBy(1)
+
+        val stg2 = surfaceRepo.getSTGById("stg2")
+        assertNotNull(stg2)
+        assertEquals(7.0, stg2.offsetX, 0.01, "Negative rotation parallel walls: dx should propagate")
+        assertEquals(3.0, stg2.offsetY, 0.01, "Negative rotation parallel walls: dy should propagate")
+    }
+
+    @Test
+    fun lockPropagationPerpendicularWallsPassVerticalOnly() = runTest {
         setUp()
         val s1 = createWallSurface(id = "s1", rotation = 0.0)
         val s2 = createWallSurface(id = "s2", rotation = 90.0)
@@ -283,10 +348,9 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
-        // when: drag (10, 5)
         vm.onDragEnd(10.0, 5.0)
+        advanceTimeBy(1)
 
-        // want: s2 gets dy=5 only (vertical), dx=0 (horizontal blocked for perpendicular walls)
         val stg2 = surfaceRepo.getSTGById("stg2")
         assertNotNull(stg2)
         assertEquals(0.0, stg2.offsetX, 0.01, "Perpendicular walls: dx should NOT propagate")
@@ -294,8 +358,7 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun lockPropagationFloorToFloorBothAxes() = runBlocking {
-        // given: 2 floors, s1 selected, s2 locked
+    fun lockPropagationFloorToFloorBothAxes() = runTest {
         setUp()
         val f1 = createFloorSurface(id = "s1", width = 3000.0, depth = 2000.0)
         val f2 = createFloorSurface(id = "s2", width = 3000.0, depth = 2000.0)
@@ -310,10 +373,9 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
-        // when: drag (8, 4)
         vm.onDragEnd(8.0, 4.0)
+        advanceTimeBy(1)
 
-        // want: both axes propagate floor→floor
         val stg2 = surfaceRepo.getSTGById("stg2")
         assertNotNull(stg2)
         assertEquals(8.0, stg2.offsetX, 0.01, "Floor→floor: dx should propagate")
@@ -321,8 +383,7 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun lockPropagationWallToFloorNoPropagation() = runBlocking {
-        // given: s1 = wall (selected), s2 = floor (locked)
+    fun lockPropagationWallToFloorNoPropagation() = runTest {
         setUp()
         val wall = createWallSurface(id = "s1", rotation = 0.0)
         val floor = createFloorSurface(id = "s2")
@@ -337,62 +398,272 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
-        // when: drag (10, 5)
         vm.onDragEnd(10.0, 5.0)
+        advanceTimeBy(1)
 
-        // want: floor STG unchanged (wall→floor = no propagation)
         val stg2 = surfaceRepo.getSTGById("stg2")
         assertNotNull(stg2)
         assertEquals(0.0, stg2.offsetX, 0.01, "Wall→floor: dx should NOT propagate")
         assertEquals(0.0, stg2.offsetY, 0.01, "Wall→floor: dy should NOT propagate")
     }
 
+    // ── Debounce Tests ──
+
     @Test
-    fun undoConsumesBuffer() = runBlocking {
-        // given: drag started with selected surface
-        setUp()
-        val s1 = createWallSurface("s1")
+    fun layoutComputeIsDebouncedDuringDrag() = runTest {
+        setUp(debounceMs = 100L)
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
         surfaceRepo.surfaces.add(s1)
-        surfaceRepo.stgs.add(createSTG("stg1", "s1", offsetX = 5.0, offsetY = 10.0))
-        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
+
+        // First drag — layout not computed yet (debounce pending)
+        vm.onDragEnd(5.0, 0.0)
+        assertNull(layoutRepo.getBySurface("s1"), "Layout should not compute before debounce")
+
+        // Second drag within debounce window — resets the timer
+        advanceTimeBy(50)
+        vm.onDragEnd(5.0, 0.0)
+        assertNull(layoutRepo.getBySurface("s1"), "Layout should still be pending after timer reset")
+
+        // Advance past debounce — now it fires
+        advanceTimeBy(101)
+        assertNotNull(layoutRepo.getBySurface("s1"), "Layout should compute after debounce elapses")
+    }
+
+    @Test
+    fun undoBypassesDebounceAndComputesImmediately() = runTest {
+        setUp(debounceMs = 100L)
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 5.0, offsetY = 10.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.onDragStart()
+        vm.onDragEnd(20.0, 15.0)
+
+        // Undo before debounce fires — should compute immediately
+        vm.undo()
+
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "Undo should trigger immediate layout compute, bypassing debounce")
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(5.0, stg.offsetX, 0.01)
+        assertEquals(10.0, stg.offsetY, 0.01)
+    }
+
+    @Test
+    fun resetToAutoBypassesDebounce() = runTest {
+        setUp(debounceMs = 100L)
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 50.0, offsetY = 30.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.resetToAuto("s1")
+
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "resetToAuto should compute immediately")
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(0.0, stg.offsetX, 0.01)
+    }
+
+    @Test
+    fun snapToCenterBypassesDebounce() = runTest {
+        setUp(debounceMs = 100L)
+        val s1 = Surface(
+            id = "s1", roomId = "r1", type = SurfaceType.WALL,
+            width = 903.0, height = 603.0,
+            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
+            groutWidth = 3.0,
+        )
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 0.0, offsetY = 0.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.snapToCenter("s1")
+
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "snapToCenter should compute immediately")
+    }
+
+    @Test
+    fun multipleRapidDragsOnlyComputeOnce() = runTest {
+        setUp(debounceMs = 100L)
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        // Simulate rapid incremental drags
+        vm.onDragEnd(1.0, 0.0)
+        advanceTimeBy(30)
+        vm.onDragEnd(1.0, 0.0)
+        advanceTimeBy(30)
+        vm.onDragEnd(1.0, 0.0)
+        advanceTimeBy(30)
+        vm.onDragEnd(1.0, 0.0)
+
+        // Before debounce: no compute
+        assertNull(layoutRepo.getBySurface("s1"))
+
+        // After debounce: exactly one compute with final offset
+        advanceTimeBy(101)
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "Should compute once after rapid drags settle")
+
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(4.0, stg.offsetX, 0.01, "All 4 offsets should accumulate")
+    }
+
+    // ── Undo Tests (end-to-end) ──
+
+    @Test
+    fun undoFullFlowRestoresOffsetsAndRecomputesLayout() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 5.0, offsetY = 10.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
         vm.onDragStart()
         assertNotNull(vm.undoBuffer.value)
 
-        // when: undo is called
-        vm.undo()
+        vm.onDragEnd(20.0, 15.0)
+        advanceTimeBy(1)
+        val afterDrag = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(25.0, afterDrag.offsetX, 0.01)
+        assertEquals(25.0, afterDrag.offsetY, 0.01)
 
-        // want: undoBuffer cleared
+        vm.undo()
         assertNull(vm.undoBuffer.value)
+        val afterUndo = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(5.0, afterUndo.offsetX, 0.01)
+        assertEquals(10.0, afterUndo.offsetY, 0.01)
+
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "Layout should be recomputed after undo")
+        Unit
     }
 
     @Test
-    fun undoRestoreRevertsOffsets() = runBlocking {
-        // given: s1 with STG at current offset (50, 30), priors from undo buffer
+    fun undoWithNoBufferIsNoOp() = runTest {
         setUp()
-        val s1 = createWallSurface("s1")
-        surfaceRepo.surfaces.add(s1)
-        surfaceRepo.stgs.add(createSTG("stg1", "s1", offsetX = 50.0, offsetY = 30.0))
-        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", offsetX = 5.0, offsetY = 10.0))
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
 
-        val priors = mapOf("stg1" to Pair(10.0, 20.0))
+        vm.undo()
 
-        // when: undoRestore with prior offsets
-        vm.undoRestore(priors)
-
-        // want: STG offset reverted to prior values
-        val restored = surfaceRepo.getSTGById("stg1")
-        assertNotNull(restored)
-        assertEquals(10.0, restored.offsetX, 0.01)
-        assertEquals(20.0, restored.offsetY, 0.01)
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(5.0, stg.offsetX, 0.01)
+        assertEquals(10.0, stg.offsetY, 0.01)
     }
 
     @Test
-    fun computeLayoutGeneratesTiles() = runBlocking {
-        // given: surface with STG covering full region, 300x200 tile, 3mm grout
+    fun undoRecomputesCorrectSurfacesAfterSelectionChange() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val s2 = createWallSurface("s2", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.addAll(listOf(s1, s2))
+        surfaceRepo.stgs.addAll(listOf(
+            createSTG("stg1", "s1", "tg1", offsetX = 0.0, offsetY = 0.0, regionW = 903.0, regionH = 603.0),
+            createSTG("stg2", "s2", "tg1", offsetX = 0.0, offsetY = 0.0, regionW = 903.0, regionH = 603.0),
+        ))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+        vm.toggleLock("s2")
+
+        vm.onDragStart()
+        vm.onDragEnd(10.0, 10.0)
+        advanceTimeBy(1)
+
+        vm.selectSurface("s2")
+        vm.undo()
+
+        val stg1 = surfaceRepo.getSTGById("stg1")!!
+        val stg2 = surfaceRepo.getSTGById("stg2")!!
+        assertEquals(0.0, stg1.offsetX, 0.01)
+        assertEquals(0.0, stg2.offsetX, 0.01)
+
+        val result1 = layoutRepo.getBySurface("s1")
+        val result2 = layoutRepo.getBySurface("s2")
+        assertNotNull(result1, "s1 layout should be recomputed")
+        assertNotNull(result2, "s2 layout should be recomputed")
+        Unit
+    }
+
+    // ── Reset Tests ──
+
+    @Test
+    fun resetToAutoZerosOffsetsAndRecomputes() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 50.0, offsetY = 30.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.resetToAuto("s1")
+
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(0.0, stg.offsetX, 0.01)
+        assertEquals(0.0, stg.offsetY, 0.01)
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result)
+        Unit
+    }
+
+    @Test
+    fun snapToCenterComputesCenteredOffset() = runTest {
+        setUp()
+        val s1 = Surface(
+            id = "s1", roomId = "r1", type = SurfaceType.WALL,
+            width = 903.0, height = 603.0,
+            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
+            groutWidth = 3.0,
+        )
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", offsetX = 0.0, offsetY = 0.0, regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.snapToCenter("s1")
+
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(148.5, stg.offsetX, 0.01)
+        assertEquals(98.5, stg.offsetY, 0.01)
+    }
+
+    // ── Layout Computation Tests ──
+
+    @Test
+    fun computeLayoutGeneratesTiles() = runTest {
         setUp()
         val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
         val tg = createTileGroup("tg1", 300.0, 200.0)
@@ -407,10 +678,8 @@ class RoomEditorViewModelTest {
         tileGroupRepo.tileGroups.add(tg)
         vm.loadSurfaces("r1")
 
-        // when: compute layout
         vm.computeLayout("s1")
 
-        // want: layout result saved with tiles
         val result = layoutRepo.getBySurface("s1")
         assertNotNull(result, "Layout result should be saved")
         assertTrue(result.tiles.isNotEmpty(), "Should have placed tiles")
@@ -418,8 +687,30 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun computeLayoutWithSelectedSurfaceUpdatesCurrentTiles() = runBlocking {
-        // given: surface selected, then layout computed
+    fun computeLayoutWithBrickPattern() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(
+            SurfaceTileGroup(
+                id = "stg1", surfaceId = "s1", tileGroupId = "tg1",
+                region = RegionRect(0.0, 0.0, 903.0, 603.0),
+                pattern = TilePattern.BRICK,
+            )
+        )
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+
+        vm.computeLayout("s1")
+
+        val result = layoutRepo.getBySurface("s1")
+        assertNotNull(result, "Brick pattern should produce layout")
+        assertTrue(result.tiles.isNotEmpty(), "Brick pattern should place tiles")
+    }
+
+    @Test
+    fun computeLayoutWithSelectedSurfaceUpdatesCurrentTiles() = runTest {
         setUp()
         val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
         val tg = createTileGroup("tg1", 300.0, 200.0)
@@ -435,82 +726,90 @@ class RoomEditorViewModelTest {
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
 
-        // when: compute layout
         vm.computeLayout("s1")
 
-        // want: currentTiles populated
         assertTrue(vm.currentTiles.value.isNotEmpty(), "currentTiles should be updated for selected surface")
     }
 
     @Test
-    fun hitTestReturnsSurfaceIdWhenTapInsideProjectedPolygon() = runBlocking {
-        // given: 2 wall surfaces visible in isometric view
+    fun computeLayoutForNonSelectedSurfaceDoesNotUpdateCurrentTiles() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val s2 = createWallSurface("s2", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.addAll(listOf(s1, s2))
+        surfaceRepo.stgs.addAll(listOf(
+            createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0),
+            createSTG("stg2", "s2", "tg1", regionW = 903.0, regionH = 603.0),
+        ))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+        vm.computeLayout("s1")
+        val tilesBeforeS2Compute = vm.currentTiles.value.toList()
+
+        vm.computeLayout("s2")
+
+        assertEquals(tilesBeforeS2Compute, vm.currentTiles.value,
+            "Computing layout for non-selected surface should not change currentTiles")
+    }
+
+    // ── Hit Test Tests ──
+
+    @Test
+    fun hitTestReturnsSurfaceId() = runTest {
         setUp()
         val s1 = Surface(
             id = "s1", roomId = "r1", type = SurfaceType.WALL,
             width = 2000.0, height = 1200.0,
             position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
         )
-        val s2 = Surface(
-            id = "s2", roomId = "r1", type = SurfaceType.WALL,
-            width = 2000.0, height = 1200.0,
-            position = SurfacePosition(0.0, 0.0, 1000.0, 90.0),
-        )
-        surfaceRepo.surfaces.addAll(listOf(s1, s2))
+        surfaceRepo.surfaces.add(s1)
         vm.loadSurfaces("r1")
 
-        // want: tap near center of canvas (where front wall s1 projects) hits s1
-        //   At viewAngle=0, origin(400,300): s1 projects near center
         val canvasW = 800.0
         val canvasH = 600.0
-        val centerX = canvasW / 2.0 // 400
-        val centerY = canvasH * 0.6 // 360 — near the isometric origin
+        val centerX = canvasW / 2.0
+        val centerY = canvasH * 0.6
 
         val hitId = vm.hitTest(centerX, centerY, canvasW, canvasH)
 
-        // hitTest should return a surface id (not null) for tap near origin
         assertNotNull(hitId, "Tap near isometric origin should hit a surface")
-        // trailing Unit: assertNotNull returns the value (String), JUnit requires void test methods
-        Unit
+        assertEquals("s1", hitId, "Should hit the correct surface")
     }
 
     @Test
-    fun hitTestReturnsNullWhenNoSurfaceHit() = runBlocking {
-        // given: 1 surface
+    fun hitTestReturnsNullWhenNoSurfaceHit() = runTest {
         setUp()
         surfaceRepo.surfaces.add(createWallSurface("s1"))
         vm.loadSurfaces("r1")
 
-        // want: tap far outside any projected surface returns null
         val hitId = vm.hitTest(-9999.0, -9999.0, 800.0, 600.0)
 
         assertNull(hitId, "Tap far outside should hit nothing")
     }
 
+    // ── Load Tests ──
+
     @Test
-    fun loadSurfacesPopulatesSurfacesStateFlow() = runBlocking {
-        // given: room with 2 surfaces
+    fun loadSurfacesPopulatesSurfacesStateFlow() = runTest {
         setUp()
         surfaceRepo.surfaces.addAll(listOf(
             createWallSurface("s1"),
             createWallSurface("s2"),
         ))
 
-        // when: load surfaces for room
         vm.loadSurfaces("r1")
 
-        // want: StateFlow has both surfaces
         assertEquals(2, vm.surfaces.value.size)
     }
 
     @Test
-    fun rotateViewHandlesNegativeAngles() {
+    fun loadSurfacesEmptyRoomReturnsEmptyList() = runTest {
         setUp()
 
-        // when: rotate by -90 from 0
-        vm.rotateView(-90)
+        vm.loadSurfaces("nonexistent-room")
 
-        // want: properly wrapped to 270 (0..359 range via floor-mod)
-        assertEquals(270, vm.viewAngle.value)
+        assertTrue(vm.surfaces.value.isEmpty())
     }
 }

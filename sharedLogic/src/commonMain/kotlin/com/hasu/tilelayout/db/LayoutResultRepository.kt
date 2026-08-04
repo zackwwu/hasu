@@ -20,31 +20,33 @@ class SqlDelightLayoutResultRepository(private val queries: TileLayoutDbQueries)
     }
 
     override suspend fun save(layoutResult: LayoutResult) {
-        val old = queries.getLayoutResultBySurface(layoutResult.surfaceId).executeAsOneOrNull()
-        if (old != null) {
-            queries.deleteTilesByLayoutResult(old.id)
-            queries.deleteLayoutResult(old.id)
-        }
+        queries.transaction {
+            val old = queries.getLayoutResultBySurface(layoutResult.surfaceId).executeAsOneOrNull()
+            if (old != null) {
+                queries.deleteTilesByLayoutResult(old.id)
+                queries.deleteLayoutResult(old.id)
+            }
 
-        queries.insertLayoutResult(
-            id = layoutResult.id,
-            surface_id = layoutResult.surfaceId,
-            computed_at = layoutResult.computedAt,
-            stale = if (layoutResult.stale) 1L else 0L,
-        )
-
-        for (tile in layoutResult.tiles) {
-            queries.insertPlacedTile(
-                layout_result_id = layoutResult.id,
-                x = tile.x,
-                y = tile.y,
-                w = tile.width,
-                h = tile.height,
-                rotation = tile.rotation,
-                is_cut = if (tile.isCut) 1L else 0L,
-                cut_edges = tile.cutEdges.joinToString(",") { it.name },
-                tile_group_id = tile.tileGroupId,
+            queries.insertLayoutResult(
+                id = layoutResult.id,
+                surface_id = layoutResult.surfaceId,
+                computed_at = layoutResult.computedAt,
+                stale = if (layoutResult.stale) 1L else 0L,
             )
+
+            for (tile in layoutResult.tiles) {
+                queries.insertPlacedTile(
+                    layout_result_id = layoutResult.id,
+                    x = tile.x,
+                    y = tile.y,
+                    w = tile.width,
+                    h = tile.height,
+                    rotation = tile.rotation,
+                    is_cut = if (tile.isCut) 1L else 0L,
+                    cut_edges = tile.cutEdges.joinToString(",") { it.name },
+                    tile_group_id = tile.tileGroupId,
+                )
+            }
         }
     }
 

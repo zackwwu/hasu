@@ -152,6 +152,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 updateSTGOffset:
 UPDATE surface_tile_groups SET offset_x = ?, offset_y = ? WHERE id = ?;
 
+updateSTG:
+UPDATE surface_tile_groups SET offset_x = ?, offset_y = ?, pattern = ?, region_x = ?, region_y = ?, region_w = ?, region_h = ? WHERE id = ?;
+
 deleteSTG:
 DELETE FROM surface_tile_groups WHERE id = ?;
 
