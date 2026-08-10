@@ -422,7 +422,7 @@ class RoomEditorViewModelTest {
     // ── Debounce Tests ──
 
     @Test
-    fun layoutComputeIsDebouncedDuringDrag() = runTest {
+    fun onDragEndComputesLayoutImmediatelyBypassingDebounce() = runTest {
         setUp(debounceMs = 100L)
         val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
         val tg = createTileGroup("tg1", 300.0, 200.0)
@@ -432,18 +432,16 @@ class RoomEditorViewModelTest {
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
 
-        // First drag — layout not computed yet (debounce pending)
+        // onDragEnd is the final drag position — compute immediately, no debounce wait
         vm.onDragEnd(5.0, 0.0)
-        assertNull(layoutRepo.getBySurface("s1"), "Layout should not compute before debounce")
+        assertNotNull(layoutRepo.getBySurface("s1"), "Layout should compute immediately on drag end")
 
-        // Second drag within debounce window — resets the timer
+        // Subsequent drags also compute immediately
         advanceTimeBy(50)
         vm.onDragEnd(5.0, 0.0)
-        assertNull(layoutRepo.getBySurface("s1"), "Layout should still be pending after timer reset")
-
-        // Advance past debounce — now it fires
-        advanceTimeBy(200)
-        assertNotNull(layoutRepo.getBySurface("s1"), "Layout should compute after debounce elapses")
+        assertNotNull(layoutRepo.getBySurface("s1"), "Each drag end should compute immediately")
+        val stg = surfaceRepo.getSTGById("stg1")!!
+        assertEquals(10.0, stg.offsetX, 0.01, "Both offsets should accumulate")
     }
 
     @Test
@@ -512,7 +510,7 @@ class RoomEditorViewModelTest {
     }
 
     @Test
-    fun multipleRapidDragsOnlyComputeOnce() = runTest {
+    fun multipleRapidDragsAccumulateOffsetsAndComputeEachEnd() = runTest {
         setUp(debounceMs = 100L)
         val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
         val tg = createTileGroup("tg1", 300.0, 200.0)
@@ -522,7 +520,7 @@ class RoomEditorViewModelTest {
         vm.loadSurfaces("r1")
         vm.selectSurface("s1")
 
-        // Simulate rapid incremental drags
+        // Simulate rapid incremental drags — each end computes immediately
         vm.onDragEnd(1.0, 0.0)
         advanceTimeBy(30)
         vm.onDragEnd(1.0, 0.0)
@@ -531,13 +529,8 @@ class RoomEditorViewModelTest {
         advanceTimeBy(30)
         vm.onDragEnd(1.0, 0.0)
 
-        // Before debounce: no compute
-        assertNull(layoutRepo.getBySurface("s1"))
-
-        // After debounce: exactly one compute with final offset
-        advanceUntilIdle()
         val result = layoutRepo.getBySurface("s1")
-        assertNotNull(result, "Should compute once after rapid drags settle")
+        assertNotNull(result, "Each drag end should compute immediately")
 
         val stg = surfaceRepo.getSTGById("stg1")!!
         assertEquals(4.0, stg.offsetX, 0.01, "All 4 offsets should accumulate")
@@ -764,6 +757,43 @@ class RoomEditorViewModelTest {
 
         assertEquals(tilesBeforeS2Compute, vm.currentTiles.value,
             "Computing layout for non-selected surface should not change currentTiles")
+    }
+
+    // ── Cut List Tests ──
+
+    @Test
+    fun computeLayoutUpdatesCutEntriesStateFlow() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+
+        assertTrue(vm.cutEntries.value.isEmpty(), "No layout yet — no cut entries")
+
+        vm.computeLayout("s1")
+
+        assertTrue(vm.cutEntries.value.isNotEmpty(), "Cut entries should be recomputed after layout")
+        assertEquals("Test Tile", vm.cutEntries.value.first().tileGroupName)
+        assertTrue(vm.cutEntries.value.all { it.locations.isNotEmpty() })
+    }
+
+    @Test
+    fun dragEndRefreshesCutEntries() = runTest {
+        setUp()
+        val s1 = createWallSurface("s1", width = 903.0, height = 603.0)
+        val tg = createTileGroup("tg1", 300.0, 200.0)
+        surfaceRepo.surfaces.add(s1)
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(tg)
+        vm.loadSurfaces("r1")
+        vm.selectSurface("s1")
+
+        vm.onDragEnd(5.0, 0.0)
+
+        assertTrue(vm.cutEntries.value.isNotEmpty(), "onDragEnd computes layout and refreshes cut entries")
     }
 
     // ── Hit Test Tests ──
