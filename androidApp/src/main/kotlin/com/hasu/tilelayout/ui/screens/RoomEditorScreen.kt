@@ -26,6 +26,7 @@ import com.hasu.tilelayout.db.SqlDelightLayoutResultRepository
 import com.hasu.tilelayout.db.SqlDelightRoomRepository
 import com.hasu.tilelayout.db.SqlDelightSurfaceRepository
 import com.hasu.tilelayout.db.SqlDelightTileGroupRepository
+import com.hasu.tilelayout.ui.tabs.LayoutTab
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -96,7 +97,7 @@ fun RoomEditorScreen(
                     roomId = roomId,
                     onSurfaceClick = onSurfaceClick,
                 )
-                1 -> PlaceholderTab("Layout — coming soon")
+                1 -> LayoutTab(vm = vm)
                 2 -> PlaceholderTab("Preview — coming soon")
                 3 -> PlaceholderTab("Cut List — coming soon")
             }
