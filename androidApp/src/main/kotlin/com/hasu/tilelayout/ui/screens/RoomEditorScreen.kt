@@ -1,0 +1,120 @@
+package com.hasu.tilelayout.ui.screens
+
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Tab
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import com.hasu.tilelayout.data.AppDatabase
+import com.hasu.tilelayout.db.SqlDelightLayoutResultRepository
+import com.hasu.tilelayout.db.SqlDelightRoomRepository
+import com.hasu.tilelayout.db.SqlDelightSurfaceRepository
+import com.hasu.tilelayout.db.SqlDelightTileGroupRepository
+import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+
+/**
+ * Room editor with tab scaffold: Surfaces | Layout | Preview | Cut List.
+ * The Surfaces tab is functional; Layout/Preview/Cut List are placeholders
+ * until their dedicated tasks land.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RoomEditorScreen(
+    projectId: String,
+    roomId: String,
+    onBack: () -> Unit,
+    onSurfaceClick: (String) -> Unit,
+) {
+    val roomRepo = remember {
+        SqlDelightRoomRepository(queries = AppDatabase.instance.tileLayoutDbQueries)
+    }
+    val vm = remember {
+        RoomEditorViewModel(
+            roomRepo = roomRepo,
+            surfaceRepo = SqlDelightSurfaceRepository(AppDatabase.instance.tileLayoutDbQueries),
+            tileGroupRepo = SqlDelightTileGroupRepository(AppDatabase.instance.tileLayoutDbQueries),
+            layoutRepo = SqlDelightLayoutResultRepository(AppDatabase.instance.tileLayoutDbQueries),
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+        )
+    }
+
+    var roomName by remember { mutableStateOf("Room") }
+    var tab by remember { mutableIntStateOf(0) }
+    var showHelp by remember { mutableStateOf(false) }
+
+    LaunchedEffect(roomId) {
+        roomName = roomRepo.getById(roomId)?.name ?: "Room"
+        vm.loadSurfaces(roomId)
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(roomName) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Text("←")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { showHelp = true }) {
+                        Text("?")
+                    }
+                },
+            )
+        },
+    ) { padding ->
+        Column(modifier = Modifier.fillMaxSize().padding(padding)) {
+            PrimaryTabRow(selectedTabIndex = tab) {
+                Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Surfaces") })
+                Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Layout") })
+                Tab(selected = tab == 2, onClick = { tab = 2 }, text = { Text("Preview") })
+                Tab(selected = tab == 3, onClick = { tab = 3 }, text = { Text("Cut List") })
+            }
+            when (tab) {
+                0 -> SurfacesListView(
+                    vm = vm,
+                    roomId = roomId,
+                    onSurfaceClick = onSurfaceClick,
+                )
+                1 -> PlaceholderTab("Layout — coming soon")
+                2 -> PlaceholderTab("Preview — coming soon")
+                3 -> PlaceholderTab("Cut List — coming soon")
+            }
+        }
+    }
+
+    if (showHelp) {
+        HelpDiagramDialog(onDismiss = { showHelp = false })
+    }
+}
+
+@Composable
+private fun PlaceholderTab(message: String) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
