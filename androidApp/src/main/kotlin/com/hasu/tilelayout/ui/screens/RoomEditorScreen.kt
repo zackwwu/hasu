@@ -27,6 +27,7 @@ import com.hasu.tilelayout.db.SqlDelightRoomRepository
 import com.hasu.tilelayout.db.SqlDelightSurfaceRepository
 import com.hasu.tilelayout.db.SqlDelightTileGroupRepository
 import com.hasu.tilelayout.ui.tabs.LayoutTab
+import com.hasu.tilelayout.ui.tabs.PreviewTab
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -34,8 +35,8 @@ import kotlinx.coroutines.SupervisorJob
 
 /**
  * Room editor with tab scaffold: Surfaces | Layout | Preview | Cut List.
- * The Surfaces tab is functional; Layout/Preview/Cut List are placeholders
- * until their dedicated tasks land.
+ * Surfaces, Layout, and Preview tabs are functional; Cut List is a placeholder
+ * until its dedicated task lands.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -98,7 +99,7 @@ fun RoomEditorScreen(
                     onSurfaceClick = onSurfaceClick,
                 )
                 1 -> LayoutTab(vm = vm)
-                2 -> PlaceholderTab("Preview — coming soon")
+                2 -> PreviewTab(vm = vm)
                 3 -> PlaceholderTab("Cut List — coming soon")
             }
         }
