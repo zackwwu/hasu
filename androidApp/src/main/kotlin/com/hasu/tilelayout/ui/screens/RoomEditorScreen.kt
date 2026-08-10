@@ -1,12 +1,10 @@
 package com.hasu.tilelayout.ui.screens
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Tab
@@ -19,13 +17,13 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.hasu.tilelayout.data.AppDatabase
 import com.hasu.tilelayout.db.SqlDelightLayoutResultRepository
 import com.hasu.tilelayout.db.SqlDelightRoomRepository
 import com.hasu.tilelayout.db.SqlDelightSurfaceRepository
 import com.hasu.tilelayout.db.SqlDelightTileGroupRepository
+import com.hasu.tilelayout.ui.tabs.CutListTab
 import com.hasu.tilelayout.ui.tabs.LayoutTab
 import com.hasu.tilelayout.ui.tabs.PreviewTab
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
@@ -35,8 +33,6 @@ import kotlinx.coroutines.SupervisorJob
 
 /**
  * Room editor with tab scaffold: Surfaces | Layout | Preview | Cut List.
- * Surfaces, Layout, and Preview tabs are functional; Cut List is a placeholder
- * until its dedicated task lands.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,23 +96,12 @@ fun RoomEditorScreen(
                 )
                 1 -> LayoutTab(vm = vm)
                 2 -> PreviewTab(vm = vm)
-                3 -> PlaceholderTab("Cut List — coming soon")
+                3 -> CutListTab(projectId = projectId, roomId = roomId)
             }
         }
     }
 
     if (showHelp) {
         HelpDiagramDialog(onDismiss = { showHelp = false })
-    }
-}
-
-@Composable
-private fun PlaceholderTab(message: String) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
     }
 }

@@ -1,7 +1,6 @@
 package com.hasu.tilelayout.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -25,7 +24,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -41,6 +39,7 @@ fun ProjectDetailScreen(
     projectId: String,
     onBack: () -> Unit,
     onRoomClick: (String) -> Unit,
+    onTileGroupClick: (String) -> Unit,
 ) {
     val projectRepo = remember {
         SqlDelightProjectRepository(queries = AppDatabase.instance.tileLayoutDbQueries)
@@ -89,7 +88,10 @@ fun ProjectDetailScreen(
                     refreshSignal = refreshRooms,
                     onRoomClick = onRoomClick,
                 )
-                else -> TileLibraryPlaceholder()
+                else -> TileLibraryScreen(
+                    projectId = projectId,
+                    onTileGroupClick = onTileGroupClick,
+                )
             }
         }
     }
@@ -112,17 +114,6 @@ fun ProjectDetailScreen(
                     showAddRoom = false
                 }
             },
-        )
-    }
-}
-
-@Composable
-private fun TileLibraryPlaceholder() {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            "Tile library coming soon",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

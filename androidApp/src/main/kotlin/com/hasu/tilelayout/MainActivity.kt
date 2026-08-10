@@ -14,6 +14,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hasu.tilelayout.data.AppDatabase
+import com.hasu.tilelayout.ui.screens.CameraScreen
 import com.hasu.tilelayout.ui.screens.HomeScreen
 import com.hasu.tilelayout.ui.screens.ProjectDetailScreen
 import com.hasu.tilelayout.ui.screens.RegionEditorScreen
@@ -39,6 +40,7 @@ sealed class Screen {
     data class RoomEditor(val projectId: String, val roomId: String) : Screen()
     data class SurfaceDetail(val projectId: String, val roomId: String, val surfaceId: String) : Screen()
     data class RegionEditor(val projectId: String, val roomId: String, val surfaceId: String) : Screen()
+    data class Camera(val projectId: String, val tileGroupId: String) : Screen()
 }
 
 @Composable
@@ -58,6 +60,9 @@ fun TileLayoutApp() {
                         projectId = projectId,
                         onBack = { screen = Screen.Home },
                         onRoomClick = { screen = Screen.RoomEditor(projectId, it) },
+                        onTileGroupClick = { tileGroupId ->
+                            screen = Screen.Camera(projectId, tileGroupId)
+                        },
                     )
                 }
 
@@ -94,6 +99,11 @@ fun TileLayoutApp() {
                         onBack = { screen = Screen.SurfaceDetail(projectId, roomId, current.surfaceId) },
                     )
                 }
+
+                is Screen.Camera -> CameraScreen(
+                    tileGroupId = current.tileGroupId,
+                    onDismiss = { screen = Screen.ProjectDetail(current.projectId) },
+                )
             }
         }
     }
