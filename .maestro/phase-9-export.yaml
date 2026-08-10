@@ -1,0 +1,133 @@
+# Maestro flow: Phase 9 — Export Pipeline Verification
+#
+# Runs on both iOS and Android. Text labels match across platforms.
+#
+# Prerequisites:
+#   - App built and installed on simulator/device
+#   - maestro installed: brew install maestro
+#
+# Run:
+#   maestro test .maestro/phase-9-export.yaml
+
+appId: com.hasu.tilelayout
+---
+- launchApp:
+    clearState: true
+
+# ── Create a test project ──
+- assertVisible: "Projects"
+- tapOn: "+"
+- inputText: "Maestro Export Test"
+- tapOn: "Create"
+
+- assertVisible: "Maestro Export Test"
+- tapOn: "Maestro Export Test"
+
+# ── Navigate to Tile Library, add a tile group ──
+- assertVisible: "Rooms"
+- tapOn: "Tile Library"
+- tapOn: "+"
+- inputText: "Ceramic White"
+- tapOn: "Tile Width"
+- inputText: "300"
+- tapOn: "Tile Height"
+- inputText: "200"
+- tapOn: "Save"
+
+- assertVisible: "Ceramic White"
+
+# ── Go back, add a room ──
+- tapOn: "Rooms"
+- tapOn: "+"
+- inputText: "Bathroom"
+- tapOn: "Room Width"
+- inputText: "3000"
+- tapOn: "Room Depth"
+- inputText: "2500"
+- tapOn: "Room Height"
+- inputText: "2400"
+- tapOn: "Create"
+
+- assertVisible: "Bathroom"
+- tapOn: "Bathroom"
+
+# ── Generate surfaces ──
+- assertVisible: "Room Editor"
+- tapOn: "Generate"
+# Select all surfaces
+- tapOn: "Front wall"
+- tapOn: "Back wall"
+- tapOn: "Left wall"
+- tapOn: "Right wall"
+- tapOn: "Floor"
+- tapOn: "Generate"
+
+# ── Assign tile group to a surface ──
+- tapOn: "Front"
+- tapOn: "Add Tile Group"
+- tapOn: "Ceramic White"
+- assertVisible: "Ceramic White"
+
+# ── Switch to Layout tab ──
+- tapOn: "Layout"
+- assertVisible: "Front"
+- tapOn: "Front"
+
+# Verify tiles render
+- takeScreenshot: layout-tiles-rendered
+
+# ── Test drag gesture ──
+- swipe:
+    from: { relative: { x: 50, y: 50 }, offset: { x: 0, y: 0 } }
+    to:   { relative: { x: 50, y: 50 }, offset: { x: 100, y: 0 } }
+    duration: 500
+- assertVisible: "Undo"
+
+# ── Test undo ──
+- tapOn: "Undo"
+- takeScreenshot: layout-after-undo
+
+# ── Test 2D Export ──
+- tapOn: "Export"
+- assertVisible: "Export 2D Layout"
+- assertVisible: "DPI"
+- assertVisible: "Save to Photos"
+- assertVisible: "Share"
+- takeScreenshot: export-2d-dialog
+
+# Adjust DPI
+- tapOn: "+"
+- assertVisible: "DPI: 250"
+- takeScreenshot: export-2d-dpi250
+
+# Dismiss export
+- tapOn: "Cancel"
+
+# ── Switch to Preview tab ──
+- tapOn: "Preview"
+- takeScreenshot: preview-3d
+
+# Rotate view
+- tapOn: "▶"
+- assertVisible: "90°"
+- takeScreenshot: preview-rotated
+
+# Top-down toggle
+- tapOn: "Top-Down"
+- takeScreenshot: preview-topdown
+
+# ── Test 3D Export ──
+- tapOn: "Export"
+- assertVisible: "Export 3D Preview"
+- tapOn: "Save to Photos"
+- takeScreenshot: export-3d-saved
+
+# ── Switch to Cut List tab ──
+- tapOn: "Cut List"
+- takeScreenshot: cutlist
+
+# ── Navigate back to home ──
+- tapOn: "Back"
+- tapOn: "Back"
+
+- assertVisible: "Maestro Export Test"
