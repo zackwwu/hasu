@@ -11,6 +11,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -30,6 +31,7 @@ import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 
 /**
  * Room editor with tab scaffold: Surfaces | Layout | Preview | Cut List.
@@ -45,13 +47,16 @@ fun RoomEditorScreen(
     val roomRepo = remember {
         SqlDelightRoomRepository(queries = AppDatabase.instance.tileLayoutDbQueries)
     }
+    val scope = remember {
+        CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    }
     val vm = remember {
         RoomEditorViewModel(
             roomRepo = roomRepo,
             surfaceRepo = SqlDelightSurfaceRepository(AppDatabase.instance.tileLayoutDbQueries),
             tileGroupRepo = SqlDelightTileGroupRepository(AppDatabase.instance.tileLayoutDbQueries),
             layoutRepo = SqlDelightLayoutResultRepository(AppDatabase.instance.tileLayoutDbQueries),
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            scope = scope,
         )
     }
 
@@ -62,6 +67,13 @@ fun RoomEditorScreen(
     LaunchedEffect(roomId) {
         roomName = roomRepo.getById(roomId)?.name ?: "Room"
         vm.loadSurfaces(roomId)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            vm.cancelPendingLayouts()
+            scope.cancel()
+        }
     }
 
     Scaffold(

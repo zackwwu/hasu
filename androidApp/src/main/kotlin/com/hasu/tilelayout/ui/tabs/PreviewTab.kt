@@ -1,12 +1,12 @@
 package com.hasu.tilelayout.ui.tabs
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -29,22 +29,17 @@ fun PreviewTab(vm: RoomEditorViewModel) {
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent()
-                            val tap = event.changes.firstOrNull() ?: continue
-                            if (tap.pressed && !topDown) {
-                                val id = vm.hitTest(
-                                    tapX = tap.position.x.toDouble(),
-                                    tapY = tap.position.y.toDouble(),
-                                    canvasWidth = size.width.toDouble(),
-                                    canvasHeight = size.height.toDouble()
-                                )
-                                if (id != null) {
-                                    scope.launch { vm.selectSurface(id) }
-                                }
-                                tap.consume()
+                .pointerInput(topDown) {
+                    if (!topDown) {
+                        detectTapGestures { offset ->
+                            val id = vm.hitTest(
+                                tapX = offset.x.toDouble(),
+                                tapY = offset.y.toDouble(),
+                                canvasWidth = size.width.toDouble(),
+                                canvasHeight = size.height.toDouble()
+                            )
+                            if (id != null) {
+                                scope.launch { vm.selectSurface(id) }
                             }
                         }
                     }

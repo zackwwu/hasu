@@ -28,6 +28,7 @@ import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -54,6 +55,7 @@ import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 
 /** Surface detail: grout settings, assigned tile groups, layout recalculation. */
@@ -67,6 +69,7 @@ fun SurfaceDetailScreen(
     onAddRegion: () -> Unit,
 ) {
     val scope = rememberCoroutineScope()
+    val vmScope = remember { CoroutineScope(SupervisorJob() + Dispatchers.Main) }
     val surfaceRepo = remember {
         SqlDelightSurfaceRepository(queries = AppDatabase.instance.tileLayoutDbQueries)
     }
@@ -82,8 +85,15 @@ fun SurfaceDetailScreen(
             surfaceRepo = surfaceRepo,
             tileGroupRepo = tileGroupRepo,
             layoutRepo = SqlDelightLayoutResultRepository(AppDatabase.instance.tileLayoutDbQueries),
-            scope = CoroutineScope(SupervisorJob() + Dispatchers.Main),
+            scope = vmScope,
         )
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            vm.cancelPendingLayouts()
+            vmScope.cancel()
+        }
     }
 
     var surface by remember { mutableStateOf<Surface?>(null) }
