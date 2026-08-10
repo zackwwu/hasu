@@ -1112,6 +1112,7 @@ git add shared/src/commonMain/kotlin/com/hasu/tilelayout/viewmodel/
 git commit -m "feat: shared ViewModels with StateFlow for platform consumption"
 ```
 
+
 ---
 
 ## Phase 6: Shared Tests
@@ -1651,4 +1652,704 @@ git commit -m "feat: integration pipeline, PNG export on both platforms"
 
 ---
 
-**Plan complete.** 20 tasks across 9 phases. Phases 1-6 are the shared Kotlin module (heavy lift). Phases 7-8 are thin platform UIs observing StateFlows and drawing via native Canvas. Phase 9 wires everything together.
+## Phase 10: Edge Detection (Tile Texture Scanning)
+
+**Goal:** Scan tile textures using the device camera — detect the tile's rectangular edges in real-time, apply perspective correction, and extract a clean top-down texture image. Works like document scanning: find the rectangle → review/adjust corners → correct perspective → crop → save.
+
+**Scope:** iOS (Vision framework + Core Image) + Android (CameraX 1.3+ ImageAnalysis + OpenCV Android SDK 4.8).
+
+**Key design decisions:**
+- Output texture aspect ratio matches the tile's `tileWidth/tileHeight` ratio (not hardcoded square)
+- Both platforms include a "Review Corners" screen where users can drag corner handles before perspective correction (auto-detection fails on busy backgrounds)
+- Stability threshold: 10 consecutive frames (~330ms at 30fps) where detected corners move < 15pts
+
+---
+
+### Task 21: Edge Detection — iOS
+
+- [ ] **Step 1: Replace CameraView with EdgeDetectionCameraView**
+
+Replace the photo-only `CameraView.swift` with a real-time rectangle-detection pipeline:
+
+```swift
+// EdgeDetectionCameraView.swift
+import SwiftUI
+import AVFoundation
+import Vision
+
+struct EdgeDetectionCameraView: View {
+    let tileGroup: TileGroup  // needed for aspect ratio
+    let onCapture: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @StateObject private var model = EdgeDetectionModel()
+    @State private var showCornerReview = false
+
+    var body: some View {
+        ZStack {
+            EdgeDetectionPreview(session: model.session)
+                .ignoresSafeArea()
+
+            // Semi-transparent overlay with rectangle cutout
+            if let rect = model.detectedRect {
+                EdgeOverlayShape(detectedRect: rect)
+                    .fill(Color.black.opacity(0.4))
+                    .allowsHitTesting(false)
+            }
+
+            VStack {
+                HStack {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title).foregroundStyle(.white).shadow(radius: 4)
+                    }.padding()
+                    Spacer()
+                    Button { model.toggleFlash() } label: {
+                        Image(systemName: model.flashOn ? "bolt.fill" : "bolt.slash.fill")
+                            .font(.title3).foregroundStyle(.white)
+                    }.padding()
+                }
+                Spacer()
+                if model.isStable {
+                    Text("Hold steady…").font(.caption).foregroundStyle(.green)
+                        .padding(8).background(.black.opacity(0.5)).clipShape(Capsule())
+                }
+                Button { showCornerReview = true } label: {
+                    ZStack {
+                        Circle().stroke(.white, lineWidth: 4).frame(width: 72, height: 72)
+                        Circle().fill(model.isStable ? Color.green : Color.white)
+                            .frame(width: 60, height: 60)
+                    }
+                }
+                .disabled(model.latestObservation == nil)
+                .padding(.bottom, 40)
+            }
+        }
+        .onAppear { model.start() }
+        .onDisappear { model.stop() }
+        .fullScreenCover(isPresented: $showCornerReview) {
+            CornerReviewView(
+                model: model,
+                tileWidth: tileGroup.tileWidth,
+                tileHeight: tileGroup.tileHeight,
+                onAccept: { image in
+                    onCapture(image)
+                    dismiss()
+                }
+            )
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Implement EdgeDetectionModel with Vision**
+
+```swift
+// EdgeDetectionModel.swift
+import AVFoundation
+import Vision
+import CoreImage
+
+/// Handles camera session and rectangle detection on the proc queue.
+/// Published properties are updated on MainActor.
+/// latestPixelBuffer and latestObservation are accessed ONLY on procQueue
+/// and copied to main-safe snapshots for the UI via captureSnapshot().
+final class EdgeDetectionModel: NSObject, ObservableObject {
+    let session = AVCaptureSession()
+    @Published var detectedRect: CGRect?
+    @Published var isStable = false
+    @Published var flashOn = false
+    @Published var viewSize: CGSize = .zero
+
+    // Main-thread-safe snapshot for capture (set atomically from proc queue)
+    @Published var latestObservation: VNRectangleObservation?
+    private(set) var snapshotBuffer: CVPixelBuffer?
+
+    private let videoOutput = AVCaptureVideoDataOutput()
+    private let sessionQueue = DispatchQueue(label: "edge.session")
+    private let procQueue = DispatchQueue(label: "edge.proc")
+
+    private lazy var rectRequest: VNDetectRectanglesRequest = {
+        let req = VNDetectRectanglesRequest { [weak self] r, e in
+            self?.handleRectangles(r, e)
+        }
+        req.minimumAspectRatio = 0.3
+        req.maximumAspectRatio = 1.0
+        req.minimumSize = 0.15
+        req.maximumObservations = 1
+        req.minimumConfidence = 0.7
+        return req
+    }()
+
+    private var lastRect: CGRect?
+    private var stableCount = 0
+    // ~330ms at 30fps — enough to confirm user is holding still
+    private let stableFrameThreshold = 10
+
+    // Proc-queue-only working state
+    private var _procPixelBuffer: CVPixelBuffer?
+    private var _procObservation: VNRectangleObservation?
+
+    func start() { /* AVCaptureSession setup — same as current CameraModel */ }
+    func stop() { sessionQueue.async { self.session.stopRunning() } }
+    func toggleFlash() { /* torch on/off */ }
+
+    /// Snapshot the current detection state for the corner review screen.
+    func captureSnapshot() -> (CIImage, VNRectangleObservation)? {
+        // Called from main; reads the atomically-published snapshot
+        guard let obs = latestObservation, let buf = snapshotBuffer else { return nil }
+        return (CIImage(cvPixelBuffer: buf), obs)
+    }
+
+    private func handleRectangles(_ request: VNRequest, _ error: Error?) {
+        guard let results = request.results as? [VNRectangleObservation],
+              let best = results.first else {
+            DispatchQueue.main.async { self.isStable = false; self.stableCount = 0; self.detectedRect = nil }
+            return
+        }
+        // Publish snapshot atomically
+        _procObservation = best
+        let vr = normalizedRect(best)
+
+        DispatchQueue.main.async {
+            self.latestObservation = best
+            self.snapshotBuffer = self._procPixelBuffer
+            self.detectedRect = vr
+            if let last = self.lastRect, self.rectsClose(last, vr) {
+                self.stableCount += 1
+                self.isStable = self.stableCount >= self.stableFrameThreshold
+            } else {
+                self.stableCount = 0
+                self.isStable = false
+            }
+            self.lastRect = vr
+        }
+    }
+
+    private func normalizedRect(_ obs: VNRectangleObservation) -> CGRect {
+        // Vision [0,1] bottom-left origin → UIKit top-left origin
+        let invY = 1.0 - obs.boundingBox.origin.y - obs.boundingBox.height
+        return CGRect(
+            x: obs.boundingBox.origin.x * viewSize.width,
+            y: invY * viewSize.height,
+            width: obs.boundingBox.width * viewSize.width,
+            height: obs.boundingBox.height * viewSize.height
+        )
+    }
+
+    private func rectsClose(_ a: CGRect, _ b: CGRect) -> Bool {
+        abs(a.midX - b.midX) < 15 && abs(a.midY - b.midY) < 15 &&
+        abs(a.width - b.width) < 30 && abs(a.height - b.height) < 30
+    }
+}
+
+extension EdgeDetectionModel: AVCaptureVideoDataOutputSampleBufferDelegate {
+    nonisolated func captureOutput(_ output: AVCaptureOutput,
+                      didOutput sampleBuffer: CMSampleBuffer,
+                      from connection: AVCaptureConnection) {
+        guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        _procPixelBuffer = pb
+        try? VNImageRequestHandler(cvPixelBuffer: pb, orientation: .up, options: [:])
+            .perform([rectRequest])
+    }
+}
+```
+
+- [ ] **Step 3: Implement CornerReviewView (manual corner adjustment)**
+
+```swift
+// CornerReviewView.swift
+import SwiftUI
+import Vision
+
+/// Allows user to drag 4 corner handles to adjust detected rectangle
+/// before perspective correction. Handles the case where auto-detection
+/// is imperfect (tiles on busy floors, partial occlusion, etc.).
+struct CornerReviewView: View {
+    let model: EdgeDetectionModel
+    let tileWidth: Double
+    let tileHeight: Double
+    let onAccept: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var topLeft: CGPoint = .zero
+    @State private var topRight: CGPoint = .zero
+    @State private var bottomLeft: CGPoint = .zero
+    @State private var bottomRight: CGPoint = .zero
+    @State private var previewImage: UIImage?
+
+    var body: some View {
+        VStack {
+            Text("Adjust Corners").font(.headline).padding(.top)
+            Text("Drag corners to align with tile edges")
+                .font(.caption).foregroundStyle(.secondary)
+
+            GeometryReader { geometry in
+                ZStack {
+                    if let img = previewImage {
+                        Image(uiImage: img).resizable().scaledToFit()
+                    }
+                    // 4 draggable corner handles
+                    CornerHandle(position: $topLeft)
+                    CornerHandle(position: $topRight)
+                    CornerHandle(position: $bottomLeft)
+                    CornerHandle(position: $bottomRight)
+                    // Lines connecting corners
+                    CornerLinesShape(tl: topLeft, tr: topRight, bl: bottomLeft, br: bottomRight)
+                        .stroke(Color.green, lineWidth: 2)
+                }
+            }
+
+            HStack(spacing: 20) {
+                Button("Re-scan") { dismiss() }
+                    .buttonStyle(.bordered)
+                Button("Accept") { applyCorrection() }
+                    .buttonStyle(.borderedProminent)
+            }
+            .padding()
+        }
+        .onAppear { initializeCorners() }
+    }
+
+    private func initializeCorners() {
+        guard let (ciImage, obs) = model.captureSnapshot() else { dismiss(); return }
+        let ctx = CIContext()
+        guard let cg = ctx.createCGImage(ciImage, from: ciImage.extent) else { return }
+        previewImage = UIImage(cgImage: cg)
+        // Map observation normalized corners to view coordinates
+        let w = ciImage.extent.width
+        let h = ciImage.extent.height
+        topLeft = CGPoint(x: obs.topLeft.x * w, y: (1 - obs.topLeft.y) * h)
+        topRight = CGPoint(x: obs.topRight.x * w, y: (1 - obs.topRight.y) * h)
+        bottomLeft = CGPoint(x: obs.bottomLeft.x * w, y: (1 - obs.bottomLeft.y) * h)
+        bottomRight = CGPoint(x: obs.bottomRight.x * w, y: (1 - obs.bottomRight.y) * h)
+    }
+
+    private func applyCorrection() {
+        guard let (ciImage, _) = model.captureSnapshot() else { return }
+        let outputSize = PerspectiveCorrector.outputSize(
+            tileWidth: tileWidth, tileHeight: tileHeight, maxDimension: 512
+        )
+        guard let result = PerspectiveCorrector.correctWithCorners(
+            image: ciImage,
+            topLeft: topLeft, topRight: topRight,
+            bottomLeft: bottomLeft, bottomRight: bottomRight,
+            outputSize: outputSize
+        ) else { return }
+        onAccept(result)
+    }
+}
+```
+
+- [ ] **Step 4: Implement PerspectiveCorrector**
+
+```swift
+// PerspectiveCorrector.swift
+import UIKit
+import CoreImage
+import Vision
+
+struct PerspectiveCorrector {
+    /// Compute output size preserving the tile's aspect ratio.
+    /// Fits within maxDimension on the longest side.
+    static func outputSize(tileWidth: Double, tileHeight: Double, maxDimension: CGFloat = 512) -> CGSize {
+        let aspect = tileWidth / tileHeight
+        if aspect >= 1.0 {
+            return CGSize(width: maxDimension, height: maxDimension / aspect)
+        } else {
+            return CGSize(width: maxDimension * aspect, height: maxDimension)
+        }
+    }
+
+    /// Correct using a VNRectangleObservation (auto-detected corners).
+    /// IMPORTANT: Vision corners are in normalized [0,1] coordinates.
+    /// CIPerspectiveCorrection expects pixel coordinates in the image extent.
+    static func correct(
+        image: CIImage,
+        observation: VNRectangleObservation,
+        outputSize: CGSize
+    ) -> UIImage? {
+        let w = image.extent.width
+        let h = image.extent.height
+        return correctWithCorners(
+            image: image,
+            topLeft: CGPoint(x: observation.topLeft.x * w, y: observation.topLeft.y * h),
+            topRight: CGPoint(x: observation.topRight.x * w, y: observation.topRight.y * h),
+            bottomLeft: CGPoint(x: observation.bottomLeft.x * w, y: observation.bottomLeft.y * h),
+            bottomRight: CGPoint(x: observation.bottomRight.x * w, y: observation.bottomRight.y * h),
+            outputSize: outputSize
+        )
+    }
+
+    /// Correct using explicit pixel-coordinate corners (from manual adjustment).
+    static func correctWithCorners(
+        image: CIImage,
+        topLeft: CGPoint, topRight: CGPoint,
+        bottomLeft: CGPoint, bottomRight: CGPoint,
+        outputSize: CGSize
+    ) -> UIImage? {
+        guard let filter = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+        filter.setValue(image, forKey: kCIInputImageKey)
+        // CIPerspectiveCorrection uses bottom-left origin (same as CIImage)
+        filter.setValue(CIVector(cgPoint: topLeft), forKey: "inputTopLeft")
+        filter.setValue(CIVector(cgPoint: topRight), forKey: "inputTopRight")
+        filter.setValue(CIVector(cgPoint: bottomLeft), forKey: "inputBottomLeft")
+        filter.setValue(CIVector(cgPoint: bottomRight), forKey: "inputBottomRight")
+        guard let corrected = filter.outputImage else { return nil }
+        let scaleX = outputSize.width / corrected.extent.width
+        let scaleY = outputSize.height / corrected.extent.height
+        let scaled = corrected.transformed(by: CGAffineTransform(scaleX: scaleX, y: scaleY))
+        let ctx = CIContext()
+        guard let cg = ctx.createCGImage(scaled, from: scaled.extent) else { return nil }
+        return UIImage(cgImage: cg)
+    }
+}
+```
+
+- [ ] **Step 5: Save texture and update TileGroup**
+
+```swift
+// In the calling view after onCapture:
+func saveTexture(image: UIImage, tileGroupId: String, tileGroupRepo: TileGroupRepository) async {
+    let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        .appendingPathComponent("textures")
+    try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    let fileURL = dir.appendingPathComponent("\(tileGroupId).png")
+    try? image.pngData()?.write(to: fileURL)
+
+    // Update tile group in DB
+    if let tg = try? await tileGroupRepo.getById(id: tileGroupId) {
+        let updated = TileGroup(
+            id: tg.id, projectId: tg.projectId, name: tg.name,
+            tileWidth: tg.tileWidth, tileHeight: tg.tileHeight,
+            texturePath: fileURL.path, source: TileSource.captured
+        )
+        try? await tileGroupRepo.insert(tileGroup: updated)
+    }
+}
+```
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add iosApp/iosApp/Views/EdgeDetectionCameraView.swift \
+        iosApp/iosApp/Views/EdgeDetectionModel.swift \
+        iosApp/iosApp/Views/CornerReviewView.swift \
+        iosApp/iosApp/Views/PerspectiveCorrector.swift
+git commit -m "feat(ios): edge detection tile scanner with Vision + corner review + perspective correction"
+```
+
+---
+
+### Task 22: Edge Detection — Android
+
+**Requires:** CameraX 1.3+ (for `ImageProxy.toBitmap()`), OpenCV Android SDK 4.8.0.
+
+- [ ] **Step 1: Add dependencies**
+
+```kotlin
+// androidApp/build.gradle.kts — add:
+dependencies {
+    // CameraX 1.3+ required for ImageProxy.toBitmap()
+    implementation("androidx.camera:camera-core:1.3.0")
+    implementation("androidx.camera:camera-camera2:1.3.0")
+    implementation("androidx.camera:camera-lifecycle:1.3.0")
+    implementation("androidx.camera:camera-view:1.3.0")
+    // OpenCV Android SDK — ~30MB, includes native libs for arm64/x86_64
+    implementation("org.opencv:opencv:4.8.0")
+}
+```
+
+- [ ] **Step 2: Implement EdgeDetectionScreen with CameraX**
+
+```kotlin
+// EdgeDetectionScreen.kt
+@Composable
+fun EdgeDetectionScreen(
+    tileGroup: TileGroup,  // needed for aspect ratio
+    onCapture: (Bitmap) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
+    var detectedCorners by remember { mutableStateOf<QuadCorners?>(null) }
+    var isStable by remember { mutableStateOf(false) }
+    var showCornerReview by remember { mutableStateOf(false) }
+    var capturedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
+
+    // Stability tracking
+    var stableCount by remember { mutableIntStateOf(0) }
+    var lastCorners by remember { mutableStateOf<QuadCorners?>(null) }
+    val stableFrameThreshold = 10  // ~330ms at 30fps
+
+    Box(modifier = Modifier.fillMaxSize()) {
+        AndroidView(
+            factory = { ctx ->
+                PreviewView(ctx).also { pv ->
+                    val provider = cameraProviderFuture.get()
+                    val preview = Preview.Builder().build()
+                        .also { it.setSurfaceProvider(pv.surfaceProvider) }
+                    val analysis = ImageAnalysis.Builder()
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                    analysis.setAnalyzer(Executors.newSingleThreadExecutor()) { imageProxy ->
+                        val bitmap = imageProxy.toBitmap()
+                        val corners = EdgeDetector.detectQuadCorners(bitmap)
+                        imageProxy.close()
+                        if (corners != null) {
+                            if (lastCorners != null && cornersClose(lastCorners!!, corners)) {
+                                stableCount++
+                                isStable = stableCount >= stableFrameThreshold
+                            } else {
+                                stableCount = 0
+                                isStable = false
+                            }
+                            lastCorners = corners
+                            detectedCorners = corners
+                            capturedBitmap = bitmap
+                        } else {
+                            stableCount = 0
+                            isStable = false
+                            detectedCorners = null
+                        }
+                    }
+                    provider.bindToLifecycle(lifecycleOwner, CameraSelector.DEFAULT_BACK_CAMERA,
+                        preview, analysis)
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
+
+        // Overlay + controls
+        EdgeOverlay(corners = detectedCorners)
+        CaptureControls(isStable = isStable, onCapture = {
+            showCornerReview = true
+        }, onDismiss = onDismiss)
+    }
+
+    if (showCornerReview) {
+        CornerReviewScreen(
+            bitmap = capturedBitmap,
+            initialCorners = detectedCorners,
+            tileWidth = tileGroup.tileWidth,
+            tileHeight = tileGroup.tileHeight,
+            onAccept = { corrected -> onCapture(corrected); onDismiss() },
+            onRetry = { showCornerReview = false }
+        )
+    }
+}
+
+private fun cornersClose(a: QuadCorners, b: QuadCorners): Boolean {
+    fun dist(p1: PointF, p2: PointF) = hypot((p1.x - p2.x).toDouble(), (p1.y - p2.y).toDouble())
+    return dist(a.tl, b.tl) < 15 && dist(a.tr, b.tr) < 15 &&
+           dist(a.bl, b.bl) < 15 && dist(a.br, b.br) < 15
+}
+```
+
+- [ ] **Step 3: Implement OpenCV edge detection returning QuadCorners**
+
+```kotlin
+// EdgeDetector.kt
+import android.graphics.Bitmap
+import android.graphics.PointF
+import org.opencv.android.Utils
+import org.opencv.core.*
+import org.opencv.imgproc.Imgproc
+
+object EdgeDetector {
+    /**
+     * Detect the largest quadrilateral in the image.
+     * Returns 4 corner points (not an axis-aligned rect) for perspective correction.
+     */
+    fun detectQuadCorners(bitmap: Bitmap): QuadCorners? {
+        val src = Mat(); Utils.bitmapToMat(bitmap, src)
+        val gray = Mat(); Imgproc.cvtColor(src, gray, Imgproc.COLOR_RGBA2GRAY)
+        Imgproc.GaussianBlur(gray, gray, Size(5.0, 5.0), 0.0)
+        val edges = Mat(); Imgproc.Canny(gray, edges, 75.0, 200.0)
+
+        val contours = mutableListOf<MatOfPoint>()
+        Imgproc.findContours(edges, contours, Mat(),
+            Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE)
+
+        var bestApprox: MatOfPoint2f? = null
+        var maxArea = 0.0
+        val minArea = src.rows() * src.cols() * 0.15
+
+        for (c in contours) {
+            val peri = Imgproc.arcLength(MatOfPoint2f(*c.toArray()), true)
+            val approx = MatOfPoint2f()
+            Imgproc.approxPolyDP(MatOfPoint2f(*c.toArray()), approx, 0.02 * peri, true)
+            if (approx.total() == 4L) {
+                val area = Imgproc.contourArea(approx)
+                if (area > maxArea && area > minArea) {
+                    maxArea = area
+                    bestApprox = approx
+                }
+            }
+        }
+
+        val points = bestApprox?.toArray() ?: return null
+        if (points.size != 4) return null
+
+        // Order points: top-left, top-right, bottom-right, bottom-left
+        val sorted = orderCorners(points)
+        return QuadCorners(
+            tl = PointF(sorted[0].x.toFloat(), sorted[0].y.toFloat()),
+            tr = PointF(sorted[1].x.toFloat(), sorted[1].y.toFloat()),
+            br = PointF(sorted[2].x.toFloat(), sorted[2].y.toFloat()),
+            bl = PointF(sorted[3].x.toFloat(), sorted[3].y.toFloat()),
+        )
+    }
+
+    /** Order 4 points as: top-left, top-right, bottom-right, bottom-left. */
+    private fun orderCorners(pts: Array<Point>): List<Point> {
+        val sorted = pts.sortedBy { it.x + it.y }
+        val tl = sorted.first()
+        val br = sorted.last()
+        val remaining = pts.filter { it != tl && it != br }
+        val tr = remaining.minByOrNull { it.y - it.x }!!
+        val bl = remaining.maxByOrNull { it.y - it.x }!!
+        return listOf(tl, tr, br, bl)
+    }
+}
+
+data class QuadCorners(val tl: PointF, val tr: PointF, val br: PointF, val bl: PointF)
+```
+
+- [ ] **Step 4: CornerReviewScreen (manual adjustment)**
+
+```kotlin
+// CornerReviewScreen.kt
+@Composable
+fun CornerReviewScreen(
+    bitmap: Bitmap?,
+    initialCorners: QuadCorners?,
+    tileWidth: Double,
+    tileHeight: Double,
+    onAccept: (Bitmap) -> Unit,
+    onRetry: () -> Unit
+) {
+    var corners by remember { mutableStateOf(initialCorners ?: return) }
+    val bmp = bitmap ?: return
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text("Adjust Corners", style = MaterialTheme.typography.titleMedium,
+            modifier = Modifier.padding(16.dp))
+        Text("Drag corners to align with tile edges",
+            style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 16.dp))
+
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            // Draw bitmap + draggable corner handles
+            Canvas(modifier = Modifier.fillMaxSize()) { /* draw bitmap + lines */ }
+            // 4 draggable handles (DragGesture on each corner)
+        }
+
+        Row(modifier = Modifier.padding(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onRetry) { Text("Re-scan") }
+            Button(onClick = {
+                val outputSize = PerspectiveCorrector.outputSize(tileWidth, tileHeight, maxDimension = 512)
+                val corrected = PerspectiveCorrector.correct(bmp, corners, outputSize)
+                onAccept(corrected)
+            }) { Text("Accept") }
+        }
+    }
+}
+```
+
+- [ ] **Step 5: Perspective correction with aspect-ratio-aware output**
+
+```kotlin
+// PerspectiveCorrector.kt
+import android.graphics.*
+import kotlin.math.roundToInt
+
+object PerspectiveCorrector {
+    /** Compute output size preserving tile aspect ratio, fitting within maxDimension. */
+    fun outputSize(tileWidth: Double, tileHeight: Double, maxDimension: Int = 512): Size {
+        val aspect = tileWidth / tileHeight
+        return if (aspect >= 1.0) {
+            Size(maxDimension, (maxDimension / aspect).roundToInt())
+        } else {
+            Size((maxDimension * aspect).roundToInt(), maxDimension)
+        }
+    }
+
+    fun correct(source: Bitmap, corners: QuadCorners, outputSize: Size): Bitmap {
+        val w = outputSize.width.toFloat()
+        val h = outputSize.height.toFloat()
+        val src = floatArrayOf(
+            corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y,
+            corners.br.x, corners.br.y, corners.bl.x, corners.bl.y)
+        val dst = floatArrayOf(0f, 0f, w, 0f, w, h, 0f, h)
+        val matrix = Matrix()
+        matrix.setPolyToPoly(src, 0, dst, 0, 4)
+        val output = Bitmap.createBitmap(outputSize.width, outputSize.height, Bitmap.Config.ARGB_8888)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+        Canvas(output).drawBitmap(source, matrix, paint)
+        return output
+    }
+}
+```
+
+Save to internal storage and update `TileGroup.texturePath` + `source = TileSource.CAPTURED`.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetectionScreen.kt \
+        androidApp/src/main/java/com/hasu/tilelayout/ui/screens/CornerReviewScreen.kt \
+        androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetector.kt \
+        androidApp/src/main/java/com/hasu/tilelayout/ui/screens/PerspectiveCorrector.kt
+git commit -m "feat(android): edge detection tile scanner with OpenCV + corner review + CameraX 1.3"
+```
+
+---
+
+### Task 23: Shared Texture Storage Path
+
+- [ ] **Step 1: Add `expect` texture base directory to shared module**
+
+```kotlin
+// sharedLogic/src/commonMain/.../texture/TextureStorage.kt
+package com.hasu.tilelayout.texture
+
+expect fun textureBaseDirectory(): String
+
+object TextureStorage {
+    fun pathFor(tileGroupId: String): String =
+        "${textureBaseDirectory()}/$tileGroupId.png"
+}
+```
+
+- [ ] **Step 2: Platform actuals**
+
+```kotlin
+// sharedLogic/src/iosMain/.../texture/TextureStorage.ios.kt
+actual fun textureBaseDirectory(): String {
+    val paths = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, true
+    )
+    return "${paths.first()}/textures"
+}
+```
+
+```kotlin
+// sharedLogic/src/androidMain/.../texture/TextureStorage.android.kt
+// Requires ApplicationContext — pass via init or DI
+actual fun textureBaseDirectory(): String {
+    return "${ApplicationContextHolder.context.filesDir.absolutePath}/textures"
+}
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "feat: shared TextureStorage helper for captured texture file paths"
+```
+
+---
+
+**Plan updated.** 23 tasks across 10 phases. Phases 1-6 shared Kotlin. Phases 7-8 thin platform UIs. Phase 9 integration. Phase 10 edge detection with manual corner review fallback on both platforms.
+
+**Phase 10 complete.** 3 tasks: iOS edge detection (Vision + CIPerspectiveCorrection), Android edge detection (CameraX + OpenCV), and shared texture storage. The flow: open camera → detect rectangle in real-time → auto-stabilize when rect holds still → capture → perspective-correct to flat top-down image → save as PNG → update TileGroup.texturePath.
