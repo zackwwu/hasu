@@ -29,6 +29,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.ui.canvas.drawTiles
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.launch
@@ -60,7 +61,7 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                     selected = surface.id == selectedId,
                     onClick = { scope.launch { vm.selectSurface(surface.id) } },
                     label = {
-                        val typeName = if (surface.type.name == "WALL") "Wall" else "Floor"
+                        val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
                         Text("$typeName ${surface.width.toInt()}×${surface.height.toInt()}", fontSize = 11.sp)
                     }
                 )
@@ -94,6 +95,9 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                                 scope.launch { vm.onDragEnd(dx, dy) }
                                 dragAccumulator = Offset.Zero
                             },
+                            onDragCancel = {
+                                dragAccumulator = Offset.Zero
+                            },
                             onDrag = { change, dragAmount ->
                                 change.consume()
                                 dragAccumulator += dragAmount
@@ -117,7 +121,7 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                         selected = surface.id in lockedIds,
                         onClick = { vm.toggleLock(surface.id) },
                         label = {
-                            val typeName = if (surface.type.name == "WALL") "Wall" else "Floor"
+                            val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
                             Text("$typeName ${surface.width.toInt()}×${surface.height.toInt()}", fontSize = 10.sp)
                         }
                     )

@@ -9,7 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -36,7 +36,7 @@ import com.hasu.tilelayout.models.SurfaceType
  * and groups cut tiles via [CutListGenerator].
  */
 @Composable
-fun CutListTab(projectId: String, roomId: String) {
+fun CutListTab(roomId: String) {
     val db = AppDatabase.instance
     val surfaceRepo = remember { SqlDelightSurfaceRepository(db.tileLayoutDbQueries) }
     val layoutRepo = remember { SqlDelightLayoutResultRepository(db.tileLayoutDbQueries) }
@@ -46,27 +46,31 @@ fun CutListTab(projectId: String, roomId: String) {
     var isLoading by remember { mutableStateOf(true) }
 
     LaunchedEffect(roomId) {
-        val surfaces = surfaceRepo.getByRoom(roomId)
-        val resultsBySurface = mutableMapOf<String, LayoutResult>()
-        val surfaceNames = mutableMapOf<String, String>()
-        val tileGroupNames = mutableMapOf<String, String>()
+        try {
+            val surfaces = surfaceRepo.getByRoom(roomId)
+            val resultsBySurface = mutableMapOf<String, LayoutResult>()
+            val surfaceNames = mutableMapOf<String, String>()
+            val tileGroupNames = mutableMapOf<String, String>()
 
-        for (surface in surfaces) {
-            surfaceNames[surface.id] =
-                "${if (surface.type == SurfaceType.WALL) "Wall" else "Floor"} ${surface.width.toInt()}×${surface.height.toInt()}"
-            val result = layoutRepo.getBySurface(surface.id)
-            if (result != null) {
-                resultsBySurface[surface.id] = result
-                for (tile in result.tiles) {
-                    if (!tileGroupNames.containsKey(tile.tileGroupId)) {
-                        tileGroupNames[tile.tileGroupId] =
-                            tileGroupRepo.getById(tile.tileGroupId)?.name ?: tile.tileGroupId
+            for (surface in surfaces) {
+                surfaceNames[surface.id] =
+                    "${if (surface.type == SurfaceType.WALL) "Wall" else "Floor"} ${surface.width.toInt()}×${surface.height.toInt()}"
+                val result = layoutRepo.getBySurface(surface.id)
+                if (result != null) {
+                    resultsBySurface[surface.id] = result
+                    for (tile in result.tiles) {
+                        if (!tileGroupNames.containsKey(tile.tileGroupId)) {
+                            tileGroupNames[tile.tileGroupId] =
+                                tileGroupRepo.getById(tile.tileGroupId)?.name ?: tile.tileGroupId
+                        }
                     }
                 }
             }
-        }
 
-        cutEntries = CutListGenerator.generate(resultsBySurface, surfaceNames, tileGroupNames)
+            cutEntries = CutListGenerator.generate(resultsBySurface, surfaceNames, tileGroupNames)
+        } catch (_: Exception) {
+            cutEntries = emptyList()
+        }
         isLoading = false
     }
 
@@ -76,7 +80,7 @@ fun CutListTab(projectId: String, roomId: String) {
         }
     } else if (cutEntries.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("No cuts needed — all tiles fit perfectly.")
+            Text("No cut tiles found. Compute a layout to see the cut list.")
         }
     } else {
         LazyColumn(modifier = Modifier.fillMaxSize().padding(12.dp)) {
@@ -104,7 +108,7 @@ fun CutEntryCard(entry: CutEntry) {
             )
 
             if (expanded) {
-                Divider(modifier = Modifier.padding(vertical = 4.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
                 entry.locations.forEach { loc ->
                     Text(
                         "${loc.surfaceName}: ${loc.count} tiles",

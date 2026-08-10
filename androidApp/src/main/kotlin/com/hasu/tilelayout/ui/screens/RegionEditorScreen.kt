@@ -280,9 +280,3 @@ private fun TileGroupPickerDialog(
     )
 }
 
-private fun patternLabel(pattern: TilePattern): String = when (pattern) {
-    TilePattern.GRID -> "Grid"
-    TilePattern.BRICK -> "Brick"
-    TilePattern.STACKED -> "Stacked"
-    TilePattern.HERRINGBONE -> "Herringbone"
-}

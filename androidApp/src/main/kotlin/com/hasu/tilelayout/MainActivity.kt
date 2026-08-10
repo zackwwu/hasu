@@ -2,6 +2,7 @@ package com.hasu.tilelayout
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,7 +11,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hasu.tilelayout.data.AppDatabase
@@ -34,7 +35,7 @@ class MainActivity : ComponentActivity() {
 }
 
 /** Simple state-based navigation. */
-sealed class Screen {
+sealed class Screen : java.io.Serializable {
     object Home : Screen()
     data class ProjectDetail(val projectId: String) : Screen()
     data class RoomEditor(val projectId: String, val roomId: String) : Screen()
@@ -47,7 +48,19 @@ sealed class Screen {
 fun TileLayoutApp() {
     MaterialTheme {
         Surface(modifier = Modifier.fillMaxSize()) {
-            var screen by remember { mutableStateOf<Screen>(Screen.Home) }
+            var screen by rememberSaveable { mutableStateOf<Screen>(Screen.Home) }
+
+            // System back button handling
+            BackHandler(enabled = screen !is Screen.Home) {
+                screen = when (val current = screen) {
+                    is Screen.ProjectDetail -> Screen.Home
+                    is Screen.RoomEditor -> Screen.ProjectDetail(current.projectId)
+                    is Screen.SurfaceDetail -> Screen.RoomEditor(current.projectId, current.roomId)
+                    is Screen.RegionEditor -> Screen.SurfaceDetail(current.projectId, current.roomId, current.surfaceId)
+                    is Screen.Camera -> Screen.ProjectDetail(current.projectId)
+                    Screen.Home -> Screen.Home
+                }
+            }
 
             when (val current = screen) {
                 Screen.Home -> HomeScreen(

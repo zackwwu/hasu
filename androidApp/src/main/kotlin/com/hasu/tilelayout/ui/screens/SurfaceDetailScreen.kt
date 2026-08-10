@@ -47,6 +47,7 @@ import com.hasu.tilelayout.db.SqlDelightTileGroupRepository
 import com.hasu.tilelayout.models.GroutColor
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceTileGroup
+import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 import com.hasu.tilelayout.models.TilePattern
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
@@ -207,7 +208,7 @@ fun SurfaceDetailScreen(
 private fun SurfaceInfoCard(surface: Surface) {
     Card(modifier = Modifier.fillMaxWidth(), elevation = CardDefaults.cardElevation(1.dp)) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            InfoRow("Type", if (surface.type.name == "WALL") "Wall" else "Floor")
+            InfoRow("Type", if (surface.type == SurfaceType.WALL) "Wall" else "Floor")
             InfoRow("Dimensions", "${surface.width.toInt()} × ${surface.height.toInt()} mm")
             InfoRow("Position", "(x ${surface.position.x.toInt()}, y ${surface.position.y.toInt()}, z ${surface.position.z.toInt()})")
             InfoRow("Rotation", "${surface.position.rotation.toInt()}°")
@@ -329,14 +330,7 @@ private fun PatternChip(pattern: TilePattern) {
     )
 }
 
-private fun patternLabel(pattern: TilePattern): String = when (pattern) {
-    TilePattern.GRID -> "Grid"
-    TilePattern.BRICK -> "Brick"
-    TilePattern.STACKED -> "Stacked"
-    TilePattern.HERRINGBONE -> "Herringbone"
-}
-
 private fun surfaceTitle(surface: Surface): String {
-    val typeName = if (surface.type.name == "WALL") "Wall" else "Floor"
+    val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
     return "$typeName ${surface.width.toInt()}×${surface.height.toInt()}"
 }
