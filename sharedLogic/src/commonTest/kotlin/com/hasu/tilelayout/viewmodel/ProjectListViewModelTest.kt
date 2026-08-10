@@ -12,6 +12,7 @@ class ProjectListViewModelTest {
         override suspend fun getAll(): List<Project> = projects.toList()
         override suspend fun getById(id: String): Project? = projects.find { it.id == id }
         override suspend fun insert(project: Project) {
+            projects.removeAll { it.id == project.id }
             projects.add(project)
         }
         override suspend fun delete(id: String) {

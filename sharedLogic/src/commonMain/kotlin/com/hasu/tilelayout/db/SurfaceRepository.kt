@@ -75,9 +75,14 @@ class SqlDelightSurfaceRepository(private val queries: TileLayoutDbQueries) : Su
     }
 
     override suspend fun updateSTG(stg: SurfaceTileGroup) {
-        queries.updateSTGOffset(
+        queries.updateSTG(
             offset_x = stg.offsetX,
             offset_y = stg.offsetY,
+            pattern = stg.pattern.name,
+            region_x = stg.region.x,
+            region_y = stg.region.y,
+            region_w = stg.region.width,
+            region_h = stg.region.height,
             id = stg.id,
         )
     }
