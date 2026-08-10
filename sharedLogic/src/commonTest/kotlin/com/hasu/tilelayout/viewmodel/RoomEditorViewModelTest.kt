@@ -17,6 +17,7 @@ import com.hasu.tilelayout.models.TilePattern
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.*
 
@@ -298,6 +299,7 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
+        vm.onDragStart()
         vm.onDragEnd(10.0, 5.0)
         advanceTimeBy(1)
 
@@ -323,6 +325,7 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
+        vm.onDragStart()
         vm.onDragEnd(7.0, 3.0)
         advanceTimeBy(1)
 
@@ -348,6 +351,7 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
+        vm.onDragStart()
         vm.onDragEnd(10.0, 5.0)
         advanceTimeBy(1)
 
@@ -373,6 +377,7 @@ class RoomEditorViewModelTest {
         vm.selectSurface("s1")
         vm.toggleLock("s2")
 
+        vm.onDragStart()
         vm.onDragEnd(8.0, 4.0)
         advanceTimeBy(1)
 
@@ -430,7 +435,7 @@ class RoomEditorViewModelTest {
         assertNull(layoutRepo.getBySurface("s1"), "Layout should still be pending after timer reset")
 
         // Advance past debounce — now it fires
-        advanceTimeBy(101)
+        advanceTimeBy(200)
         assertNotNull(layoutRepo.getBySurface("s1"), "Layout should compute after debounce elapses")
     }
 
@@ -523,7 +528,7 @@ class RoomEditorViewModelTest {
         assertNull(layoutRepo.getBySurface("s1"))
 
         // After debounce: exactly one compute with final offset
-        advanceTimeBy(101)
+        advanceUntilIdle()
         val result = layoutRepo.getBySurface("s1")
         assertNotNull(result, "Should compute once after rapid drags settle")
 

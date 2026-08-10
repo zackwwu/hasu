@@ -169,7 +169,7 @@ struct LayoutTabView: View {
                     .font(.caption)
             }
             .buttonStyle(.bordered)
-            .disabled(vm.undoBuffer == nil)
+            .disabled(!vm.hasUndoBuffer)
 
             Spacer()
 

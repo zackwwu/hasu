@@ -12,7 +12,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     @Published var selectedSurfaceId: String? = nil
     @Published var viewAngle: Int = 0
     @Published var lockedSurfaceIds: Set<String> = []
-    @Published var undoBuffer: [String: KotlinPair<KotlinDouble, KotlinDouble>]? = nil
+    @Published var hasUndoBuffer = false
     @Published var currentTiles: [PlacedTile] = []
     @Published var isDragging = false
 
@@ -23,7 +23,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
         let surfaceRepo = SqlDelightSurfaceRepository(queries: db.tileLayoutDbQueries)
         let tileGroupRepo = SqlDelightTileGroupRepository(queries: db.tileLayoutDbQueries)
         let layoutRepo = SqlDelightLayoutResultRepository(queries: db.tileLayoutDbQueries)
-        return RoomEditorViewModel(
+        return DatabaseProvider.shared.createRoomEditorViewModel(
             roomRepo: roomRepo,
             surfaceRepo: surfaceRepo,
             tileGroupRepo: tileGroupRepo,
@@ -48,17 +48,12 @@ final class IOSRoomEditorViewModel: ObservableObject {
     }
 
     func selectSurface(_ id: String?) {
-        sharedVM.selectSurface(id: id)
-        refresh()
-        // Trigger layout computation for newly selected surface
-        if let id {
-            Task {
-                do {
-                    try await sharedVM.computeLayout(surfaceId: id)
-                    refresh()
-                } catch {
-                    print("computeLayout failed: \(error)")
-                }
+        Task {
+            do {
+                try await sharedVM.selectSurface(id: id)
+                refresh()
+            } catch {
+                print("selectSurface failed: \(error)")
             }
         }
     }
@@ -85,6 +80,8 @@ final class IOSRoomEditorViewModel: ObservableObject {
     func onDragEnd(dx: Double, dy: Double) async {
         do {
             try await sharedVM.onDragEnd(dx: dx, dy: dy)
+            // Allow the debounced layout compute in shared VM to fire
+            try await Task.sleep(nanoseconds: 150_000_000)
             refresh()
         } catch {
             print("onDragEnd failed: \(error)")
@@ -92,15 +89,11 @@ final class IOSRoomEditorViewModel: ObservableObject {
     }
 
     func undo() async {
-        let buffer = sharedVM.undoBuffer.value as? [String: KotlinPair<KotlinDouble, KotlinDouble>]
-        sharedVM.undo()
-        if let priors = buffer {
-            do {
-                try await sharedVM.undoRestore(priors: priors)
-                refresh()
-            } catch {
-                print("undoRestore failed: \(error)")
-            }
+        do {
+            try await sharedVM.undo()
+            refresh()
+        } catch {
+            print("undo failed: \(error)")
         }
     }
 
@@ -156,8 +149,8 @@ final class IOSRoomEditorViewModel: ObservableObject {
         surfaces = sharedVM.surfaces.value as? [Surface] ?? []
         selectedSurfaceId = sharedVM.selectedSurfaceId.value as? String
         viewAngle = Int(sharedVM.viewAngle.value as? Int32 ?? 0)
-        lockedSurfaceIds = sharedVM.lockedSurfaceIds.value as? Set<String> ?? []
+        lockedSurfaceIds = Set(sharedVM.lockedSurfaceIds.value as? [String] ?? [])
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
-        // undoBuffer stays as the shared value for undo flow
+        hasUndoBuffer = sharedVM.undoBuffer.value != nil
     }
 }
