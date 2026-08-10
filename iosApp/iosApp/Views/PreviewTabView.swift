@@ -45,6 +45,7 @@ struct PreviewTabView: View {
                     Image(systemName: "arrow.counterclockwise")
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("rotate-left")
 
                 Text("\(vm.viewAngle)°")
                     .font(.headline)
@@ -56,6 +57,7 @@ struct PreviewTabView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.bordered)
+                .accessibilityIdentifier("rotate-right")
 
                 Divider()
                     .frame(height: 24)

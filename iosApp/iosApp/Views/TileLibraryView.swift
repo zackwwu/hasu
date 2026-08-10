@@ -47,6 +47,7 @@ struct TileLibraryView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityIdentifier("add-tile-group")
         }
         .sheet(isPresented: $showAdd) {
             AddTileGroupSheet(projectId: projectId) {
@@ -139,6 +140,7 @@ private struct AddTileGroupSheet: View {
         NavigationStack {
             Form {
                 TextField("Tile name (e.g. White Ceramic)", text: $name)
+                    .accessibilityIdentifier("tile-name-field")
 
                 Section("Tile Size (mm)") {
                     HStack {

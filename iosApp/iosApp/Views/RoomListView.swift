@@ -58,6 +58,7 @@ struct RoomListView: View {
             } label: {
                 Image(systemName: "plus")
             }
+            .accessibilityIdentifier("add-room")
         }
         .sheet(isPresented: $showAddRoom) {
             AddRoomSheet(projectId: projectId) {
@@ -102,6 +103,7 @@ private struct AddRoomSheet: View {
         NavigationStack {
             Form {
                 TextField("Room name (e.g. Bathroom)", text: $name)
+                    .accessibilityIdentifier("room-name-field")
 
                 Section("Dimensions (mm)") {
                     HStack {

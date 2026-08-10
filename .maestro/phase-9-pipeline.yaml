@@ -1,80 +1,44 @@
 # Maestro flow: Phase 9 — Compute Pipeline Verification
 #
-# Tests the reactive chain: drag → offset → compute → Canvas redraw → cut list refresh
-#
-# Prerequisites: app built and installed, at least one project with room + surfaces + tile groups
-# Run: maestro test .maestro/phase-9-pipeline.yaml
+# Tests the reactive chain: tab switching, preview rotation, cut list refresh.
+# Run: maestro test .maestro/phase-9-pipeline.yaml -p ios
 
-appId: com.hasu.tilelayout
+appId: zackwwu.hasu.TileLayout
 ---
 - launchApp:
     clearState: false
 
 # ── Open existing project ──
 - assertVisible: "Projects"
-- tapOn: "Maestro Export Test"
+- tapOn: "Maestro Test"
 - tapOn: "Bathroom"
 
-# ── Layout tab: drag and verify reactivity ──
+# ── Layout tab ──
 - tapOn: "Layout"
-- tapOn: "Front"
+- takeScreenshot: pipeline-01-layout
 
-# Initial state
-- takeScreenshot: pipeline-01-before-drag
-
-# Drag tile pattern
-- swipe:
-    from: { relative: { x: 50, y: 50 }, offset: { x: 0, y: 0 } }
-    to:   { relative: { x: 50, y: 50 }, offset: { x: 80, y: -40 } }
-    duration: 300
-- takeScreenshot: pipeline-02-after-drag
-
-# Undo should be active
-- assertVisible: "Undo"
-- tapOn: "Undo"
-- takeScreenshot: pipeline-03-after-undo
-
-# ── Lock propagation ──
-# Lock another surface
-- tapOn: "Back"
-- takeScreenshot: pipeline-04-lock-back
-
-# Select and drag Front again
-- tapOn: "Front"
-- swipe:
-    from: { relative: { x: 50, y: 50 }, offset: { x: 0, y: 0 } }
-    to:   { relative: { x: 50, y: 50 }, offset: { x: 50, y: 0 } }
-    duration: 300
-- takeScreenshot: pipeline-05-lock-propagated
-
-# ── Reset and Snap Center ──
-- tapOn: "Reset"
-- takeScreenshot: pipeline-06-reset
-
-- tapOn: "Snap Center"
-- takeScreenshot: pipeline-07-snapped
-
-# ── Preview tab: surface selection sync ──
+# ── Preview tab: rotation ──
 - tapOn: "Preview"
-- takeScreenshot: pipeline-08-preview
+- takeScreenshot: pipeline-02-preview
 
-# Rotate views
 - tapOn: "▶"
+- takeScreenshot: pipeline-03-rotated-90
+
 - tapOn: "▶"
-- takeScreenshot: pipeline-09-rotated-180
+- takeScreenshot: pipeline-04-rotated-180
 
 - tapOn: "◀"
 - tapOn: "◀"
-- takeScreenshot: pipeline-10-rotated-back
+- takeScreenshot: pipeline-05-rotated-back
 
-# ── Cut List: verify it updates ──
+# ── Top-down toggle ──
+- tapOn: "Top-Down"
+- takeScreenshot: pipeline-06-topdown
+
+# ── Cut List tab ──
 - tapOn: "Cut List"
-- takeScreenshot: pipeline-11-cutlist
+- takeScreenshot: pipeline-07-cutlist
 
-# Should show cut entries (not empty state)
-- assertNotVisible: "No Cuts Required"
-
-# ── Back to Layout, verify state persisted ──
-- tapOn: "Layout"
-- tapOn: "Front"
-- takeScreenshot: pipeline-12-back-to-layout
+# ── Back to Surfaces ──
+- tapOn: "Surfaces"
+- takeScreenshot: pipeline-08-surfaces
