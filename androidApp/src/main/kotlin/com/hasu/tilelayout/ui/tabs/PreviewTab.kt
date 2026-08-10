@@ -12,6 +12,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.ui.canvas.drawIsometricRoom
+import com.hasu.tilelayout.ui.export.ExportDialog
+import com.hasu.tilelayout.ui.export.ExportHelper
+import com.hasu.tilelayout.ui.export.drawIsometricRoomToCanvas
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.launch
 
@@ -22,6 +25,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
     val viewAngle by vm.viewAngle.collectAsState()
     val scope = rememberCoroutineScope()
     var topDown by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // 3D Canvas
@@ -78,6 +82,33 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                 Text("Top-Down", fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
                 Switch(checked = topDown, onCheckedChange = { topDown = it })
             }
+
+            OutlinedButton(onClick = { showExport = true }) {
+                Text("Export", fontSize = 12.sp)
+            }
+        }
+
+        if (showExport) {
+            ExportDialog(
+                title = "3D Preview",
+                onDismiss = { showExport = false },
+                onRender = { dpi ->
+                    val scale = dpi / 72f
+                    val wPx = (1200 * scale).toInt()
+                    val hPx = (900 * scale).toInt()
+                    ExportHelper.renderToBitmap(wPx, hPx) { canvas ->
+                        // Draw isometric room using android.graphics.Canvas
+                        drawIsometricRoomToCanvas(
+                            canvas = canvas,
+                            surfaces = surfaces,
+                            viewAngle = if (topDown) 90 else viewAngle,
+                            selectedSurfaceId = selectedId,
+                            widthPx = wPx.toFloat(),
+                            heightPx = hPx.toFloat(),
+                        )
+                    }
+                }
+            )
         }
     }
 }

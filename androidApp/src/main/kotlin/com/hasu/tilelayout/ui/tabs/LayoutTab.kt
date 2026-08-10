@@ -31,6 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.ui.canvas.drawTiles
+import com.hasu.tilelayout.ui.export.ExportDialog
+import com.hasu.tilelayout.ui.export.ExportHelper
+import com.hasu.tilelayout.ui.export.drawTilesToCanvas
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.launch
 
@@ -49,6 +52,7 @@ fun LayoutTab(vm: RoomEditorViewModel) {
     val groutWidth = selectedSurface?.groutWidth ?: 3.0
 
     var dragAccumulator by remember { mutableStateOf(Offset.Zero) }
+    var showExport by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // Surface selector chips
@@ -145,6 +149,28 @@ fun LayoutTab(vm: RoomEditorViewModel) {
             OutlinedButton(onClick = {
                 scope.launch { vm.undo() }
             }, enabled = undoBuffer != null) { Text("Undo", fontSize = 12.sp) }
+
+            OutlinedButton(onClick = { showExport = true }) {
+                Text("Export", fontSize = 12.sp)
+            }
+        }
+
+        if (showExport) {
+            ExportDialog(
+                title = "2D Layout",
+                onDismiss = { showExport = false },
+                onRender = { dpi ->
+                    val scale = dpi / 72f
+                    // Compute pixel dimensions from the surface size
+                    val selectedSurface = surfaces.find { it.id == selectedId }
+                    val wPx = ((selectedSurface?.width ?: 1000.0) * scale).toInt()
+                    val hPx = ((selectedSurface?.height ?: 1000.0) * scale).toInt()
+                    ExportHelper.renderToBitmap(wPx, hPx) { canvas ->
+                        // Draw tiles using android.graphics.Canvas (mirror of drawTiles)
+                        drawTilesToCanvas(canvas, currentTiles, groutColor, groutWidth, scale)
+                    }
+                }
+            )
         }
     }
 }
