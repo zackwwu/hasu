@@ -205,18 +205,12 @@ struct SurfaceDetailView: View {
     }
 
     private func updateGrout() async {
-        let updated = Surface(
-            id: surface.id,
-            roomId: surface.roomId,
-            type: surface.type,
-            width: surface.width,
-            height: surface.height,
-            position: surface.position,
-            groutColor: selectedGroutColor,
-            groutWidth: groutWidth
-        )
         do {
-            try await surfaceRepo.insert(surface: updated)
+            try await surfaceRepo.updateGrout(
+                id: surface.id,
+                groutColor: selectedGroutColor,
+                groutWidth: groutWidth
+            )
             try await vm.load(roomId: surface.roomId)
             await vm.computeLayoutForSurface(surfaceId: surface.id)
         } catch {

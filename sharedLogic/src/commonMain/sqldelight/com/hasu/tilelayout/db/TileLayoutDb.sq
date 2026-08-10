@@ -136,6 +136,9 @@ insertSurface:
 INSERT OR REPLACE INTO surfaces(id, room_id, type, width, height, pos_x, pos_y, pos_z, pos_rotation, grout_color, grout_width)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
+updateSurface:
+UPDATE surfaces SET grout_color = ?, grout_width = ? WHERE id = ?;
+
 deleteSurface:
 DELETE FROM surfaces WHERE id = ?;
 

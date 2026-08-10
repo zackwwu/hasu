@@ -138,9 +138,8 @@ struct LayoutTabView: View {
         HStack(spacing: 12) {
             Button {
                 Task {
-                    // Reset: recompute layout with default (zero) offsets
                     if let surfaceId = vm.selectedSurfaceId {
-                        await vm.computeLayoutForSurface(surfaceId: surfaceId)
+                        await vm.resetToAuto(surfaceId: surfaceId)
                     }
                 }
             } label: {
@@ -151,9 +150,8 @@ struct LayoutTabView: View {
 
             Button {
                 Task {
-                    // Snap center: set offsets so pattern is centered on surface region
                     if let surfaceId = vm.selectedSurfaceId {
-                        await vm.computeLayoutForSurface(surfaceId: surfaceId)
+                        await vm.snapToCenter(surfaceId: surfaceId)
                     }
                 }
             } label: {

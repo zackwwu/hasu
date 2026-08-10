@@ -124,6 +124,26 @@ final class IOSRoomEditorViewModel: ObservableObject {
         }
     }
 
+    /// Reset offsets to zero and recompute layout.
+    func resetToAuto(surfaceId: String) async {
+        do {
+            try await sharedVM.resetToAuto(surfaceId: surfaceId)
+            refresh()
+        } catch {
+            print("resetToAuto failed: \(error)")
+        }
+    }
+
+    /// Snap offsets to center pattern on surface and recompute layout.
+    func snapToCenter(surfaceId: String) async {
+        do {
+            try await sharedVM.snapToCenter(surfaceId: surfaceId)
+            refresh()
+        } catch {
+            print("snapToCenter failed: \(error)")
+        }
+    }
+
     // MARK: - Helpers
 
     var otherSurfaces: [Surface] {
@@ -148,8 +168,10 @@ final class IOSRoomEditorViewModel: ObservableObject {
     private func refresh() {
         surfaces = sharedVM.surfaces.value as? [Surface] ?? []
         selectedSurfaceId = sharedVM.selectedSurfaceId.value as? String
-        viewAngle = Int(sharedVM.viewAngle.value as? Int32 ?? 0)
-        lockedSurfaceIds = Set(sharedVM.lockedSurfaceIds.value as? [String] ?? [])
+        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
+            viewAngle = kotlinInt.intValue
+        }
+        lockedSurfaceIds = Set((sharedVM.lockedSurfaceIds.value as? Set<AnyHashable>)?.compactMap { $0 as? String } ?? [])
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
         hasUndoBuffer = sharedVM.undoBuffer.value != nil
     }

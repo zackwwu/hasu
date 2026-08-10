@@ -12,6 +12,7 @@ interface SurfaceRepository {
     suspend fun getByRoom(roomId: String): List<Surface>
     suspend fun getById(id: String): Surface?
     suspend fun insert(surface: Surface)
+    suspend fun updateGrout(id: String, groutColor: GroutColor, groutWidth: Double)
     suspend fun delete(id: String)
 
     suspend fun getSTGsBySurface(surfaceId: String): List<SurfaceTileGroup>
@@ -44,6 +45,14 @@ class SqlDelightSurfaceRepository(private val queries: TileLayoutDbQueries) : Su
             pos_rotation = surface.position.rotation,
             grout_color = surface.groutColor.name,
             grout_width = surface.groutWidth,
+        )
+    }
+
+    override suspend fun updateGrout(id: String, groutColor: GroutColor, groutWidth: Double) {
+        queries.updateSurface(
+            grout_color = groutColor.name,
+            grout_width = groutWidth,
+            id = id,
         )
     }
 

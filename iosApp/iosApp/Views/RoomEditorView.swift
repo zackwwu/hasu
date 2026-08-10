@@ -58,41 +58,6 @@ struct RoomEditorView: View {
     }
 }
 
-// MARK: - Stubs (implemented in Tasks 12-14)
-
-private struct LayoutTabStub: View {
-    @ObservedObject var vm: IOSRoomEditorViewModel
-    var body: some View {
-        ContentUnavailableView(
-            "Layout Tab",
-            systemImage: "square.grid.3x3",
-            description: Text("Coming in Task 12")
-        )
-    }
-}
-
-private struct PreviewTabStub: View {
-    @ObservedObject var vm: IOSRoomEditorViewModel
-    var body: some View {
-        ContentUnavailableView(
-            "3D Preview",
-            systemImage: "cube.transparent",
-            description: Text("Coming in Task 13")
-        )
-    }
-}
-
-private struct CutListTabStub: View {
-    @ObservedObject var vm: IOSRoomEditorViewModel
-    var body: some View {
-        ContentUnavailableView(
-            "Cut List",
-            systemImage: "scissors",
-            description: Text("Coming in Task 14")
-        )
-    }
-}
-
 #Preview {
     NavigationStack {
         RoomEditorView(roomId: "preview-room-id")

@@ -4,6 +4,7 @@ import com.hasu.tilelayout.db.LayoutResultRepository
 import com.hasu.tilelayout.db.RoomRepository
 import com.hasu.tilelayout.db.SurfaceRepository
 import com.hasu.tilelayout.db.TileGroupRepository
+import com.hasu.tilelayout.models.GroutColor
 import com.hasu.tilelayout.models.LayoutResult
 import com.hasu.tilelayout.models.PlacedTile
 import com.hasu.tilelayout.models.RegionRect
@@ -46,6 +47,12 @@ class RoomEditorViewModelTest {
         override suspend fun insert(surface: Surface) {
             require(surfaces.none { it.id == surface.id }) { "Duplicate surface id: ${surface.id}" }
             surfaces.add(surface)
+        }
+        override suspend fun updateGrout(id: String, groutColor: GroutColor, groutWidth: Double) {
+            val idx = surfaces.indexOfFirst { it.id == id }
+            if (idx >= 0) {
+                surfaces[idx] = surfaces[idx].copy(groutColor = groutColor, groutWidth = groutWidth)
+            }
         }
         override suspend fun delete(id: String) { surfaces.removeAll { it.id == id } }
 
