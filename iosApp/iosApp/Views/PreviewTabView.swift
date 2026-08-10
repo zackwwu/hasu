@@ -5,6 +5,7 @@ import SwiftUI
 struct PreviewTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
     @State private var topDown = false
+    @State private var showExportSheet = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -70,6 +71,16 @@ struct PreviewTabView: View {
                         vm.rotateView(90 - (vm.viewAngle % 360))
                     }
                 }
+
+                Spacer()
+
+                Button {
+                    showExportSheet = true
+                } label: {
+                    Label("Export", systemImage: "square.and.arrow.up")
+                        .font(.caption)
+                }
+                .buttonStyle(.bordered)
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
@@ -87,6 +98,23 @@ struct PreviewTabView: View {
                 }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+            }
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheetView(title: "Preview") { dpi in
+                ExportService.renderToImage(
+                    content: Canvas { context, size in
+                        IsometricCanvas.drawIsometricRoom(
+                            context: &context,
+                            size: size,
+                            surfaces: vm.surfaces,
+                            viewAngle: vm.viewAngle,
+                            selectedSurfaceId: vm.selectedSurfaceId
+                        )
+                    }
+                    .background(Color.white),
+                    dpi: dpi
+                )
             }
         }
     }

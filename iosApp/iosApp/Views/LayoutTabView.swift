@@ -6,6 +6,7 @@ import SharedLogic
 struct LayoutTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
     @GestureState private var dragOffset = CGSize.zero
+    @State private var showExportSheet = false
 
     private let scaleFactor: Double = 1.0  // Points per mm — adjust for zoom
 
@@ -26,6 +27,23 @@ struct LayoutTabView: View {
 
             // Action buttons
             actionButtons
+        }
+        .sheet(isPresented: $showExportSheet) {
+            ExportSheetView(title: "Layout") { dpi in
+                ExportService.renderToImage(
+                    content: Canvas { context, size in
+                        SurfaceCanvas.drawTiles(
+                            context: &context,
+                            size: size,
+                            tiles: vm.currentTiles,
+                            groutColor: .gray,
+                            groutWidth: 3
+                        )
+                    }
+                    .background(Color.white),
+                    dpi: dpi
+                )
+            }
         }
     }
 
@@ -168,6 +186,15 @@ struct LayoutTabView: View {
             }
             .buttonStyle(.bordered)
             .disabled(!vm.hasUndoBuffer)
+
+            Button {
+                showExportSheet = true
+            } label: {
+                Label("Export", systemImage: "square.and.arrow.up")
+                    .font(.caption)
+            }
+            .buttonStyle(.bordered)
+            .disabled(vm.currentTiles.isEmpty)
 
             Spacer()
 
