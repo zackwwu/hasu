@@ -1,9 +1,11 @@
 # Maestro flow: Phase 9 — Compute Pipeline Verification
 #
 # Tests the reactive chain: tab switching, preview rotation, cut list refresh.
-# Run: maestro test .maestro/phase-9-pipeline.yaml -p ios
+#
+# iOS:      maestro test .maestro/phase-9-pipeline.yaml -p ios -e APP_ID=zackwwu.hasu.TileLayout
+# Android:  maestro test .maestro/phase-9-pipeline.yaml -p android -e APP_ID=com.hasu.tilelayout
 
-appId: zackwwu.hasu.TileLayout
+appId: ${APP_ID}
 ---
 - launchApp:
     clearState: false
@@ -21,18 +23,46 @@ appId: zackwwu.hasu.TileLayout
 - tapOn: "Preview"
 - takeScreenshot: pipeline-02-preview
 
-- tapOn:
-    id: "rotate-right"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "rotate-right"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "▶"
 - takeScreenshot: pipeline-03-rotated-90
 
-- tapOn:
-    id: "rotate-right"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "rotate-right"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "▶"
 - takeScreenshot: pipeline-04-rotated-180
 
-- tapOn:
-    id: "rotate-left"
-- tapOn:
-    id: "rotate-left"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "rotate-left"
+      - tapOn:
+          id: "rotate-left"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "◀"
+      - tapOn: "◀"
 - takeScreenshot: pipeline-05-rotated-back
 
 # ── Top-down toggle ──
