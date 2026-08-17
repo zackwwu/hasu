@@ -6,6 +6,7 @@ struct PreviewTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
     @State private var topDown = false
     @State private var showExportSheet = false
+    @State private var zoomAtGestureStart: Double = 1.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -19,7 +20,8 @@ struct PreviewTabView: View {
                         size: size,
                         surfaces: vm.surfaces,
                         viewAngle: vm.viewAngle,
-                        selectedSurfaceId: vm.selectedSurfaceId
+                        selectedSurfaceId: vm.selectedSurfaceId,
+                        zoom: vm.previewZoom
                     )
                 }
                 .contentShape(Rectangle())
@@ -33,6 +35,16 @@ struct PreviewTabView: View {
                         vm.selectSurface(id)
                     }
                 }
+                .simultaneousGesture(
+                    MagnifyGesture()
+                        .onChanged { value in
+                            // magnification is cumulative per gesture, starting at 1.0
+                            if value.magnification == 1.0 {
+                                zoomAtGestureStart = vm.previewZoom
+                            }
+                            vm.setPreviewZoom(zoomAtGestureStart * value.magnification)
+                        }
+                )
             }
 
             Divider()
@@ -73,6 +85,15 @@ struct PreviewTabView: View {
                         vm.rotateView(90 - (vm.viewAngle % 360))
                     }
                 }
+
+                Button {
+                    vm.resetPreviewZoom()
+                } label: {
+                    Text("\(Int(vm.previewZoom * 100))%")
+                        .font(.caption)
+                        .foregroundStyle(vm.previewZoom != 1.0 ? Color.blue : Color.secondary)
+                }
+                .buttonStyle(.plain)
 
                 Spacer()
 

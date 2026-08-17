@@ -375,4 +375,77 @@ class IsometricProjectionTest {
         assertEquals(200.0, fit.originX, 0.001)
         assertEquals(180.0, fit.originY, 0.001)
     }
+
+    // --- Wall rotation ---
+
+    @Test
+    fun wallRotation90SpansZAxisNotXAxis() {
+        // have: two walls with identical dimensions/anchor, rotation 0 vs 90
+        // want: rot 90 wall spans Z (projects along -X at viewAngle 0),
+        //       not X like the rot 0 wall
+        val rot0 = Surface(
+            roomId = "r1", type = SurfaceType.WALL,
+            width = 1000.0, height = 800.0,
+            position = SurfacePosition(0.0, 0.0, 1000.0, 0.0),
+        )
+        val rot90 = rot0.copy(position = rot0.position.copy(rotation = 90.0))
+        val c0 = IsometricProjection.projectSurfaceCorners(rot0, 0, 0.0, 0.0)
+        val c90 = IsometricProjection.projectSurfaceCorners(rot90, 0, 0.0, 0.0)
+        assertNotEquals(c0, c90)
+        // rot 90: width extends along -Z; at angle 0, Z maps to x = -rz*COS30
+        val minX = c90.minOf { it.x }
+        assertTrue(minX < -800.0, "rot-90 wall should extend left, minX=$minX")
+    }
+
+    @Test
+    fun wallRotation180AnchorsAtFarCorner() {
+        // have: rot 180 wall anchored at (2000, 0, 3000)
+        // want: spans X from 1000..2000 (anchored at the far corner), fixed z
+        val wall = Surface(
+            roomId = "r1", type = SurfaceType.WALL,
+            width = 1000.0, height = 800.0,
+            position = SurfacePosition(2000.0, 0.0, 3000.0, 180.0),
+        )
+        val corners = IsometricProjection.projectSurfaceCorners(wall, 0, 0.0, 0.0)
+        val rot0AtAnchor = IsometricProjection.projectSurfaceCorners(
+            wall.copy(position = wall.position.copy(rotation = 0.0)), 0, 0.0, 0.0,
+        )
+        // rot 180 wall spans the opposite direction from the anchor
+        val xMin180 = corners.minOf { it.x }
+        val xMax0 = rot0AtAnchor.maxOf { it.x }
+        assertTrue(xMin180 < xMax0 - 500.0, "rot-180 wall should extend back from anchor")
+    }
+
+    @Test
+    fun fullRoomFootprintFormsClosedBox() {
+        // have: room 3000×4000×2400, all 4 walls + floor generated
+        // want: at angle 0 the projected wall corners never extend past
+        //       the floor's projected extents (no wall sticks out sideways)
+        val roomId = "r1"
+        val surfaces = SurfacePositionCalculator.generate(
+            roomId = roomId,
+            roomWidth = 3000.0, roomDepth = 4000.0, roomHeight = 2400.0,
+            includeFront = true, includeBack = true, includeLeft = true,
+            includeRight = true, includeFloor = true,
+        )
+        val floor = surfaces.first { it.type == SurfaceType.FLOOR }
+        val floorCorners = IsometricProjection.projectSurfaceCorners(floor, 0, 0.0, 0.0)
+        val fMinX = floorCorners.minOf { it.x }; val fMaxX = floorCorners.maxOf { it.x }
+        val fMinY = floorCorners.minOf { it.y }; val fMaxY = floorCorners.maxOf { it.y }
+        for (wall in surfaces.filter { it.type == SurfaceType.WALL }) {
+            val c = IsometricProjection.projectSurfaceCorners(wall, 0, 0.0, 0.0)
+            for (corner in c) {
+                assertTrue(
+                    corner.x >= fMinX - 1.0 && corner.x <= fMaxX + 1.0,
+                    "wall corner x=${corner.x} outside floor extent [$fMinX, $fMaxX]",
+                )
+                // wall tops project above the floor (smaller y); walls must
+                // never project below the floor's lowest projected corner
+                assertTrue(
+                    corner.y <= fMaxY + 1.0,
+                    "wall corner y=${corner.y} below floor bottom $fMaxY",
+                )
+            }
+        }
+    }
 }

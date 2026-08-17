@@ -10,7 +10,8 @@ struct IsometricCanvas {
         size: CGSize,
         surfaces: [Surface],
         viewAngle: Int,
-        selectedSurfaceId: String?
+        selectedSurfaceId: String?,
+        zoom: Double = 1.0
     ) {
         let projection = IsometricProjection()
         let fit = projection.fitViewport(
@@ -31,7 +32,7 @@ struct IsometricCanvas {
                 viewAngle: viewAngle,
                 originX: fit.originX,
                 originY: fit.originY,
-                scale: fit.scale,
+                scale: fit.scale * zoom,
                 count: 4
             )
 

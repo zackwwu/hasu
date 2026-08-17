@@ -62,10 +62,6 @@ class RoomEditorViewModel(
     private val scope: CoroutineScope,
     private val debounceMs: Long = LAYOUT_DEBOUNCE_MS,
 ) {
-    companion object {
-        const val LAYOUT_DEBOUNCE_MS = 100L
-    }
-
     // -- StateFlows --
 
     private val _surfaces = MutableStateFlow<List<Surface>>(emptyList())
@@ -76,6 +72,29 @@ class RoomEditorViewModel(
 
     private val _viewAngle = MutableStateFlow(0)
     val viewAngle: StateFlow<Int> = _viewAngle
+
+    /** Pinch-zoom multiplier for the 3D preview (1.0 = fit-to-canvas). Transient, not persisted. */
+    private val _previewZoom = MutableStateFlow(1.0)
+    val previewZoom: StateFlow<Double> = _previewZoom
+
+    fun zoomPreviewBy(factor: Double) {
+        val zoomed = (_previewZoom.value * factor).coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+        _previewZoom.value = zoomed
+    }
+
+    fun setPreviewZoom(zoom: Double) {
+        _previewZoom.value = zoom.coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+    }
+
+    fun resetPreviewZoom() {
+        _previewZoom.value = 1.0
+    }
+
+    companion object {
+        const val LAYOUT_DEBOUNCE_MS = 100L
+        const val MIN_PREVIEW_ZOOM = 0.5
+        const val MAX_PREVIEW_ZOOM = 4.0
+    }
 
     private val _lockedSurfaceIds = MutableStateFlow<Set<String>>(emptySet())
     val lockedSurfaceIds: StateFlow<Set<String>> = _lockedSurfaceIds
@@ -355,11 +374,12 @@ class RoomEditorViewModel(
         val fit = IsometricProjection.fitViewport(
             _surfaces.value, _viewAngle.value, canvasWidth, canvasHeight,
         )
+        val scale = fit.scale * _previewZoom.value
 
         val ordered = IsometricProjection.orderSurfaces(_surfaces.value, _viewAngle.value)
         for (surface in ordered.reversed()) {
             val corners = IsometricProjection.projectSurfaceCorners(
-                surface, _viewAngle.value, fit.originX, fit.originY, fit.scale,
+                surface, _viewAngle.value, fit.originX, fit.originY, scale,
             )
             if (IsometricProjection.pointInPolygon(tapX, tapY, corners)) {
                 return surface.id

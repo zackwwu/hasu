@@ -11,6 +11,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     @Published var surfaces: [Surface] = []
     @Published var selectedSurfaceId: String? = nil
     @Published var viewAngle: Int = 0
+    @Published var previewZoom: Double = 1.0
     @Published var lockedSurfaceIds: Set<String> = []
     @Published var hasUndoBuffer = false
     @Published var currentTiles: [PlacedTile] = []
@@ -62,6 +63,21 @@ final class IOSRoomEditorViewModel: ObservableObject {
     func rotateView(_ delta: Int) {
         sharedVM.rotateView(delta: Int32(delta))
         refresh()
+    }
+
+    func zoomPreviewBy(_ factor: Double) {
+        sharedVM.zoomPreviewBy(factor: factor)
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+    }
+
+    func setPreviewZoom(_ zoom: Double) {
+        sharedVM.setPreviewZoom(zoom: zoom)
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+    }
+
+    func resetPreviewZoom() {
+        sharedVM.resetPreviewZoom()
+        previewZoom = 1.0
     }
 
     func toggleLock(_ id: String) {
@@ -183,6 +199,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
         if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
             viewAngle = kotlinInt.intValue
         }
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
         lockedSurfaceIds = Set((sharedVM.lockedSurfaceIds.value as? Set<AnyHashable>)?.compactMap { $0 as? String } ?? [])
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
         cutEntries = sharedVM.cutEntries.value as? [CutEntry] ?? []

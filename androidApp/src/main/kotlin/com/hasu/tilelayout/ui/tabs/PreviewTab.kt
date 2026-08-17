@@ -1,7 +1,9 @@
 package com.hasu.tilelayout.ui.tabs
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -23,6 +25,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
     val surfaces by vm.surfaces.collectAsState()
     val selectedId by vm.selectedSurfaceId.collectAsState()
     val viewAngle by vm.viewAngle.collectAsState()
+    val previewZoom by vm.previewZoom.collectAsState()
     val scope = rememberCoroutineScope()
     var topDown by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
@@ -48,11 +51,17 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                         }
                     }
                 }
+                .pointerInput(Unit) {
+                    detectTransformGestures { _, _, gestureZoom, _ ->
+                        vm.zoomPreviewBy(gestureZoom.toDouble())
+                    }
+                }
         ) {
             drawIsometricRoom(
                 surfaces = surfaces,
                 viewAngle = if (topDown) 90 else viewAngle,
-                selectedSurfaceId = selectedId
+                selectedSurfaceId = selectedId,
+                zoom = previewZoom,
             )
         }
 
@@ -82,6 +91,16 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                 Text("Top-Down", fontSize = 12.sp, modifier = Modifier.padding(end = 4.dp))
                 Switch(checked = topDown, onCheckedChange = { topDown = it })
             }
+
+            Text(
+                "${(previewZoom * 100).toInt()}%",
+                fontSize = 12.sp,
+                color = if (previewZoom != 1.0) MaterialTheme.colorScheme.primary
+                else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .clickable { vm.resetPreviewZoom() }
+                    .padding(4.dp),
+            )
 
             OutlinedButton(onClick = { showExport = true }) {
                 Text("Export", fontSize = 12.sp)

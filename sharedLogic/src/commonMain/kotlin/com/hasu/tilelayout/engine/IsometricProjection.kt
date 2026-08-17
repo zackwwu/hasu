@@ -65,22 +65,49 @@ object IsometricProjection {
         val w = surface.width * scale
         val h = surface.height * scale
         val px = p.x * scale; val py = p.y * scale; val pz = p.z * scale
-        return if (surface.type == SurfaceType.FLOOR) {
+
+        // World-space corners (x, y up, z).
+        // Walls: rotation 0/180 span X, 90/270 span Z (position is the anchor corner).
+        val world: List<Triple<Double, Double, Double>> = if (surface.type == SurfaceType.FLOOR) {
             listOf(
-                project(px, py, pz, viewAngle, originX, originY),
-                project(px + w, py, pz, viewAngle, originX, originY),
-                project(px + w, py, pz + h, viewAngle, originX, originY),
-                project(px, py, pz + h, viewAngle, originX, originY),
+                Triple(px, py, pz),
+                Triple(px + w, py, pz),
+                Triple(px + w, py, pz + h),
+                Triple(px, py, pz + h),
             )
         } else {
-            listOf(
-                project(px, py, pz, viewAngle, originX, originY),
-                project(px + w, py, pz, viewAngle, originX, originY),
-                project(px + w, py + h, pz, viewAngle, originX, originY),
-                project(px, py + h, pz, viewAngle, originX, originY),
-            )
+            when (normalizeRotation(p.rotation)) {
+                90 -> listOf(
+                    Triple(px, py, pz),
+                    Triple(px, py, pz - w),
+                    Triple(px, py + h, pz - w),
+                    Triple(px, py + h, pz),
+                )
+                180 -> listOf(
+                    Triple(px, py, pz),
+                    Triple(px - w, py, pz),
+                    Triple(px - w, py + h, pz),
+                    Triple(px, py + h, pz),
+                )
+                270 -> listOf(
+                    Triple(px, py, pz),
+                    Triple(px, py, pz + w),
+                    Triple(px, py + h, pz + w),
+                    Triple(px, py + h, pz),
+                )
+                else -> listOf(
+                    Triple(px, py, pz),
+                    Triple(px + w, py, pz),
+                    Triple(px + w, py + h, pz),
+                    Triple(px, py + h, pz),
+                )
+            }
         }
+        return world.map { (x, y, z) -> project(x, y, z, viewAngle, originX, originY) }
     }
+
+    private fun normalizeRotation(rotation: Double): Int =
+        ((rotation.toInt() % 360) + 360) % 360
 
     fun orderSurfaces(surfaces: List<Surface>, viewAngle: Int): List<Surface> {
         val rad = viewAngle * PI / 180
