@@ -325,4 +325,54 @@ class IsometricProjectionTest {
         assertEquals(0.0, ordered[0].position.x, 0.01)
         assertEquals(2000.0, ordered[1].position.x, 0.01)
     }
+
+    // --- fitViewport() ---
+
+    @Test
+    fun fitViewportKeepsAllCornersInsideViewport() {
+        // have: a room-scale surface set (4000×3000 floor + 4000×2400 wall)
+        //       projected at raw mm scale would span ~6000 units
+        //       viewport is 1080×2000
+        // want: scale shrinks the room and centered origin keeps every
+        //       corner within [0, viewport] bounds
+        val surfaces = listOf(
+            Surface(roomId = "r1", type = SurfaceType.FLOOR, width = 4000.0, height = 3000.0,
+                position = SurfacePosition(0.0, 0.0, 0.0, 0.0)),
+            Surface(roomId = "r1", type = SurfaceType.WALL, width = 4000.0, height = 2400.0,
+                position = SurfacePosition(0.0, 0.0, 0.0, 0.0)),
+        )
+        for (angle in listOf(0, 90, 180, 270)) {
+            val fit = IsometricProjection.fitViewport(surfaces, angle, 1080.0, 2000.0)
+            for (surface in surfaces) {
+                for (corner in IsometricProjection.projectSurfaceCorners(
+                    surface, angle, fit.originX, fit.originY, fit.scale,
+                )) {
+                    assertTrue(corner.x >= 0.0 && corner.x <= 1080.0, "x out of bounds at angle $angle: $corner")
+                    assertTrue(corner.y >= 0.0 && corner.y <= 2000.0, "y out of bounds at angle $angle: $corner")
+                }
+            }
+        }
+    }
+
+    @Test
+    fun fitViewportScalesDownForRoomLargerThanViewport() {
+        // have: 3000×4000mm room (raw projection spans thousands of units),
+        //       small viewport 400×300
+        // want: scale < 0.5 — the room must be shrunk significantly
+        val surfaces = listOf(
+            Surface(roomId = "r1", type = SurfaceType.FLOOR, width = 3000.0, height = 4000.0,
+                position = SurfacePosition(0.0, 0.0, 0.0, 0.0)),
+        )
+        val fit = IsometricProjection.fitViewport(surfaces, 0, 400.0, 300.0)
+        assertTrue(fit.scale < 0.2, "expected scale < 0.2, got ${fit.scale}")
+        assertTrue(fit.scale > 0.0)
+    }
+
+    @Test
+    fun fitViewportEmptySurfacesFallsBackToDefaultOrigin() {
+        val fit = IsometricProjection.fitViewport(emptyList(), 0, 400.0, 300.0)
+        assertEquals(1.0, fit.scale, 0.001)
+        assertEquals(200.0, fit.originX, 0.001)
+        assertEquals(180.0, fit.originY, 0.001)
+    }
 }

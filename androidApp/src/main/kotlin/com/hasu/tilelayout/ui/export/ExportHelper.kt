@@ -174,8 +174,9 @@ fun drawIsometricRoomToCanvas(
     widthPx: Float,
     heightPx: Float,
 ) {
-    val originX = widthPx / 2
-    val originY = heightPx * 0.6f
+    val fit = IsometricProjection.fitViewport(
+        surfaces, viewAngle, widthPx.toDouble(), heightPx.toDouble(),
+    )
     val ordered = IsometricProjection.orderSurfaces(surfaces, viewAngle)
 
     val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
@@ -189,7 +190,7 @@ fun drawIsometricRoomToCanvas(
 
     for (surface in ordered) {
         val corners = IsometricProjection.projectSurfaceCorners(
-            surface, viewAngle, originX.toDouble(), originY.toDouble()
+            surface, viewAngle, fit.originX, fit.originY, fit.scale
         )
         val path = android.graphics.Path().apply {
             moveTo(corners[0].x.toFloat(), corners[0].y.toFloat())

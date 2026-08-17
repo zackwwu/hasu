@@ -9,6 +9,9 @@ object IsometricProjection {
 
     data class ScreenPoint(val x: Double, val y: Double)
 
+    /** Scale + centered origin so the room fits inside the viewport. */
+    data class ViewportFit(val scale: Double, val originX: Double, val originY: Double)
+
     fun project(sx: Double, sy: Double, sz: Double, viewAngle: Int, originX: Double, originY: Double): ScreenPoint {
         val rad = viewAngle * PI / 180
         val cosA = cos(rad); val sinA = sin(rad)
@@ -20,22 +23,61 @@ object IsometricProjection {
         )
     }
 
-    fun projectSurfaceCorners(surface: Surface, viewAngle: Int, originX: Double, originY: Double): List<ScreenPoint> {
+    /**
+     * Compute a scale and origin that fit all projected surface corners
+     * inside the viewport, centered, with a padding margin.
+     */
+    fun fitViewport(
+        surfaces: List<Surface>,
+        viewAngle: Int,
+        viewportWidth: Double,
+        viewportHeight: Double,
+        paddingFraction: Double = 0.9,
+    ): ViewportFit {
+        if (surfaces.isEmpty() || viewportWidth <= 0 || viewportHeight <= 0) {
+            return ViewportFit(1.0, viewportWidth / 2, viewportHeight * 0.6)
+        }
+        var minX = Double.MAX_VALUE; var minY = Double.MAX_VALUE
+        var maxX = -Double.MAX_VALUE; var maxY = -Double.MAX_VALUE
+        for (surface in surfaces) {
+            for (corner in projectSurfaceCorners(surface, viewAngle, 0.0, 0.0)) {
+                minX = min(minX, corner.x); minY = min(minY, corner.y)
+                maxX = max(maxX, corner.x); maxY = max(maxY, corner.y)
+            }
+        }
+        val roomW = max(1.0, maxX - minX)
+        val roomH = max(1.0, maxY - minY)
+        val scale = min(viewportWidth / roomW, viewportHeight / roomH) * paddingFraction
+        // Center the scaled room's bounding box in the viewport
+        val originX = viewportWidth / 2 - (minX + maxX) / 2 * scale
+        val originY = viewportHeight / 2 - (minY + maxY) / 2 * scale
+        return ViewportFit(scale, originX, originY)
+    }
+
+    fun projectSurfaceCorners(
+        surface: Surface,
+        viewAngle: Int,
+        originX: Double,
+        originY: Double,
+        scale: Double = 1.0,
+    ): List<ScreenPoint> {
         val p = surface.position
-        val w = surface.width; val h = surface.height
+        val w = surface.width * scale
+        val h = surface.height * scale
+        val px = p.x * scale; val py = p.y * scale; val pz = p.z * scale
         return if (surface.type == SurfaceType.FLOOR) {
             listOf(
-                project(p.x, p.y, p.z, viewAngle, originX, originY),
-                project(p.x + w, p.y, p.z, viewAngle, originX, originY),
-                project(p.x + w, p.y, p.z + h, viewAngle, originX, originY),
-                project(p.x, p.y, p.z + h, viewAngle, originX, originY),
+                project(px, py, pz, viewAngle, originX, originY),
+                project(px + w, py, pz, viewAngle, originX, originY),
+                project(px + w, py, pz + h, viewAngle, originX, originY),
+                project(px, py, pz + h, viewAngle, originX, originY),
             )
         } else {
             listOf(
-                project(p.x, p.y, p.z, viewAngle, originX, originY),
-                project(p.x + w, p.y, p.z, viewAngle, originX, originY),
-                project(p.x + w, p.y + h, p.z, viewAngle, originX, originY),
-                project(p.x, p.y + h, p.z, viewAngle, originX, originY),
+                project(px, py, pz, viewAngle, originX, originY),
+                project(px + w, py, pz, viewAngle, originX, originY),
+                project(px + w, py + h, pz, viewAngle, originX, originY),
+                project(px, py + h, pz, viewAngle, originX, originY),
             )
         }
     }

@@ -12,15 +12,28 @@ struct IsometricCanvas {
         viewAngle: Int,
         selectedSurfaceId: String?
     ) {
-        let originX = size.width / 2.0
-        let originY = size.height * 0.6
         let projection = IsometricProjection()
+        let fit = projection.fitViewport(
+            surfaces: surfaces,
+            viewAngle: Int32(viewAngle),
+            viewportWidth: Double(size.width),
+            viewportHeight: Double(size.height),
+            paddingFraction: 0.9
+        )
 
         // Order surfaces back-to-front (painter's algorithm)
         let ordered = projection.orderSurfaces(surfaces: surfaces, viewAngle: Int32(viewAngle)) as? [Surface] ?? surfaces
 
         for surface in ordered {
-            let corners = projectCorners(projection: projection, surface: surface, viewAngle: viewAngle, originX: originX, originY: originY, count: 4)
+            let corners = projectCorners(
+                projection: projection,
+                surface: surface,
+                viewAngle: viewAngle,
+                originX: fit.originX,
+                originY: fit.originY,
+                scale: fit.scale,
+                count: 4
+            )
 
             // Draw surface polygon
             var path = Path()
@@ -54,13 +67,15 @@ struct IsometricCanvas {
         viewAngle: Int,
         originX: Double,
         originY: Double,
+        scale: Double,
         count: Int
     ) -> [CGPoint] {
         let corners = projection.projectSurfaceCorners(
             surface: surface,
             viewAngle: Int32(viewAngle),
             originX: originX,
-            originY: originY
+            originY: originY,
+            scale: scale
         ) as? [Any] ?? []
 
         var points: [CGPoint] = []

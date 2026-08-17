@@ -15,13 +15,14 @@ fun DrawScope.drawIsometricRoom(
     viewAngle: Int,
     selectedSurfaceId: String?,
 ) {
-    val originX = size.width / 2
-    val originY = size.height * 0.6f
+    val fit = IsometricProjection.fitViewport(
+        surfaces, viewAngle, size.width.toDouble(), size.height.toDouble(),
+    )
     val ordered = IsometricProjection.orderSurfaces(surfaces, viewAngle)
 
     for (surface in ordered) {
         val corners = IsometricProjection.projectSurfaceCorners(
-            surface, viewAngle, originX.toDouble(), originY.toDouble()
+            surface, viewAngle, fit.originX, fit.originY, fit.scale
         )
         val path = Path().apply {
             moveTo(corners[0].x.toFloat(), corners[0].y.toFloat())

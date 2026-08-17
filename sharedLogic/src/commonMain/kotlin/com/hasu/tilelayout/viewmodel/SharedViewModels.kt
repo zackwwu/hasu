@@ -352,13 +352,14 @@ class RoomEditorViewModel(
         canvasWidth: Double,
         canvasHeight: Double,
     ): String? {
-        val originX = canvasWidth / 2.0
-        val originY = canvasHeight * 0.6
+        val fit = IsometricProjection.fitViewport(
+            _surfaces.value, _viewAngle.value, canvasWidth, canvasHeight,
+        )
 
         val ordered = IsometricProjection.orderSurfaces(_surfaces.value, _viewAngle.value)
         for (surface in ordered.reversed()) {
             val corners = IsometricProjection.projectSurfaceCorners(
-                surface, _viewAngle.value, originX, originY,
+                surface, _viewAngle.value, fit.originX, fit.originY, fit.scale,
             )
             if (IsometricProjection.pointInPolygon(tapX, tapY, corners)) {
                 return surface.id
