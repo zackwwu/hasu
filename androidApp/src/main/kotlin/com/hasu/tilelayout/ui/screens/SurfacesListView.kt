@@ -166,10 +166,8 @@ private fun SurfaceTypeBadge(type: SurfaceType) {
     )
 }
 
-private fun surfaceName(surface: Surface): String {
-    val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
-    return "$typeName ${surface.width.toInt()}×${surface.height.toInt()}"
-}
+private fun surfaceName(surface: Surface): String =
+    "${surface.displayName()} ${surface.width.toInt()}×${surface.height.toInt()}"
 
 @Composable
 private fun GenerateSurfacesDialog(

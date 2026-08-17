@@ -201,8 +201,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     }
 
     func displayName(for surface: Surface) -> String {
-        let typeName = surface.type == SurfaceType.wall ? "Wall" : "Floor"
-        return "\(typeName) \(Int(surface.width))×\(Int(surface.height))"
+        "\(surface.displayName()) \(Int(surface.width))×\(Int(surface.height))"
     }
 
     // MARK: - Private

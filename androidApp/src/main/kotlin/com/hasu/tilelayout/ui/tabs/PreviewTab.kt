@@ -10,9 +10,9 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.ui.canvas.drawIsometricRoom
 import com.hasu.tilelayout.ui.export.ExportDialog
 import com.hasu.tilelayout.ui.export.ExportHelper
@@ -27,6 +27,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
     val viewAngle by vm.viewAngle.collectAsState()
     val previewZoom by vm.previewZoom.collectAsState()
     val scope = rememberCoroutineScope()
+    val textMeasurer = rememberTextMeasurer()
     var topDown by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     var gestureStartAngle by remember { mutableStateOf(0.0) }
@@ -70,15 +71,15 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                 viewAngle = if (topDown) 90 else viewAngle,
                 selectedSurfaceId = selectedId,
                 zoom = previewZoom,
+                textMeasurer = textMeasurer,
             )
         }
 
         // Surface info chip
         selectedId?.let { sid ->
             surfaces.find { it.id == sid }?.let { surface ->
-                val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
                 Text(
-                    "$typeName ${surface.width.toInt()}×${surface.height.toInt()}mm — Angle: ${surface.position.rotation.toInt()}°",
+                    "Selected: ${surface.displayName()} ${surface.width.toInt()}×${surface.height.toInt()}mm — Angle: ${surface.position.rotation.toInt()}°",
                     style = MaterialTheme.typography.labelSmall,
                     modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
                 )

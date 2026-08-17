@@ -148,7 +148,6 @@ struct IsometricCanvas {
     }
 
     private static func surfaceLabel(surface: Surface) -> String {
-        let typeName = surface.type == SurfaceType.wall ? "Wall" : "Floor"
-        return "\(typeName) \(Int(surface.width))×\(Int(surface.height))"
+        surface.displayName()
     }
 }

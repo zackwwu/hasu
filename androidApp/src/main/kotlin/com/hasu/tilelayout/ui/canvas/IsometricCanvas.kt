@@ -6,6 +6,10 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Fill
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.unit.sp
 import com.hasu.tilelayout.engine.IsometricProjection
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
@@ -30,6 +34,7 @@ fun DrawScope.drawIsometricRoom(
     viewAngle: Int,
     selectedSurfaceId: String?,
     zoom: Double = 1.0,
+    textMeasurer: TextMeasurer? = null,
 ) {
     val fit = IsometricProjection.fitViewport(
         surfaces, viewAngle, size.width.toDouble(), size.height.toDouble(),
@@ -86,5 +91,31 @@ fun DrawScope.drawIsometricRoom(
             if (isSelected) Color(0xFF0091EA) else Color(0xFF9E9386),
             style = Stroke(width = if (isSelected) 2.5f else 1.2f),
         )
+
+        // Surface name label at the polygon centroid
+        textMeasurer?.let { measurer ->
+            val cx = corners.sumOf { it.x } / corners.size
+            val cy = corners.sumOf { it.y } / corners.size
+            val label = surface.displayName()
+            val layout = measurer.measure(
+                text = label,
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    color = Color(0xFF4A4238),
+                ),
+            )
+            drawText(
+                textMeasurer = measurer,
+                text = label,
+                topLeft = Offset(
+                    (cx - layout.size.width / 2f).toFloat(),
+                    (cy - layout.size.height / 2f).toFloat(),
+                ),
+                style = TextStyle(
+                    fontSize = 10.sp,
+                    color = Color(0xFF4A4238),
+                ),
+            )
+        }
     }
 }
