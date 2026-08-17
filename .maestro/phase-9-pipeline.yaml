@@ -21,14 +21,18 @@ appId: zackwwu.hasu.TileLayout
 - tapOn: "Preview"
 - takeScreenshot: pipeline-02-preview
 
-- tapOn: "▶"
+- tapOn:
+    id: "rotate-right"
 - takeScreenshot: pipeline-03-rotated-90
 
-- tapOn: "▶"
+- tapOn:
+    id: "rotate-right"
 - takeScreenshot: pipeline-04-rotated-180
 
-- tapOn: "◀"
-- tapOn: "◀"
+- tapOn:
+    id: "rotate-left"
+- tapOn:
+    id: "rotate-left"
 - takeScreenshot: pipeline-05-rotated-back
 
 # ── Top-down toggle ──
