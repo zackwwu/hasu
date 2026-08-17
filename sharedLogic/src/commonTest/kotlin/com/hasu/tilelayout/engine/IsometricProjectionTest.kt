@@ -417,6 +417,66 @@ class IsometricProjectionTest {
     }
 
     @Test
+    fun orderSurfacesSortsRotatedWallsByNearestCorner() {
+        // have: full room with 4 walls; at viewAngle 0 the camera looks
+        //       from +x+z, so depth = z
+        // want: left wall (rot 90, spans z 0..d) sorts BEFORE the back wall
+        //       (rot 180, at z=d) even though the left wall's anchor sits
+        //       at the far corner z=d — anchor-based sorting would draw the
+        //       left wall on top of everything
+        val surfaces = SurfacePositionCalculator.generate(
+            roomId = "r1",
+            roomWidth = 3000.0, roomDepth = 4000.0, roomHeight = 2400.0,
+            includeFront = true, includeBack = true, includeLeft = true,
+            includeRight = true, includeFloor = true,
+        )
+        val ordered = IsometricProjection.orderSurfaces(surfaces, 0)
+        val rotations = ordered.map { it.position.rotation }
+        assertTrue(
+            rotations.indexOf(90.0) < rotations.indexOf(180.0),
+            "left wall must draw before back wall, got order $rotations",
+        )
+        assertTrue(
+            rotations.indexOf(0.0) < rotations.indexOf(270.0),
+            "front wall must draw before right wall, got order $rotations",
+        )
+    }
+
+    @Test
+    fun faceLightFactorShadesWallsByViewDirection() {
+        // have: 4 walls + floor; camera at angle 0 looks from +Z
+        // want: front wall brightest, back darkest, sides mid;
+        //       floor always full light; shading rotates with the view
+        val front = Surface(
+            roomId = "r1", type = SurfaceType.WALL,
+            width = 1000.0, height = 800.0,
+            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
+        )
+        val back = front.copy(position = front.position.copy(rotation = 180.0))
+        val left = front.copy(position = front.position.copy(rotation = 90.0))
+        val right = front.copy(position = front.position.copy(rotation = 270.0))
+
+        val f = IsometricProjection.faceLightFactor(front, 0)
+        val b = IsometricProjection.faceLightFactor(back, 0)
+        val l = IsometricProjection.faceLightFactor(left, 0)
+        val r = IsometricProjection.faceLightFactor(right, 0)
+        assertTrue(f > 0.9, "front wall should be brightest, got $f")
+        assertTrue(b < 0.2, "back wall should be darkest, got $b")
+        assertTrue(l in 0.4..0.7 && r in 0.4..0.7, "side walls should be mid, got $l/$r")
+
+        // at angle 90 the light rotates: the +Z face is now a side face
+        val f90 = IsometricProjection.faceLightFactor(front, 90)
+        assertTrue(f90 in 0.4..0.7, "front wall at angle 90 should be mid, got $f90")
+
+        val floor = Surface(
+            roomId = "r1", type = SurfaceType.FLOOR,
+            width = 1000.0, height = 800.0,
+            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
+        )
+        assertEquals(1.0, IsometricProjection.faceLightFactor(floor, 90), 0.001)
+    }
+
+    @Test
     fun fullRoomFootprintFormsClosedBox() {
         // have: room 3000×4000×2400, all 4 walls + floor generated
         // want: at angle 0 the projected wall corners never extend past

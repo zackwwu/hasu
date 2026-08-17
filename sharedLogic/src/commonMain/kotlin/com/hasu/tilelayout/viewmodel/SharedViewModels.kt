@@ -133,6 +133,16 @@ class RoomEditorViewModel(
         _viewAngle.value = ((_viewAngle.value + delta) % 360 + 360) % 360
     }
 
+    /** Rotate by an arbitrary (non-90-multiple) delta in degrees — for touch gestures. */
+    fun rotateViewBy(deltaDegrees: Double) {
+        _viewAngle.value = (((_viewAngle.value + deltaDegrees).toInt() % 360) + 360) % 360
+    }
+
+    /** Set the view angle to an absolute value in degrees. */
+    fun setViewAngle(angle: Double) {
+        _viewAngle.value = (((angle.toInt() % 360) + 360) % 360)
+    }
+
     fun toggleLock(surfaceId: String) {
         val current = _lockedSurfaceIds.value
         _lockedSurfaceIds.value = if (surfaceId in current) {

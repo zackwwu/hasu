@@ -29,6 +29,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
     val scope = rememberCoroutineScope()
     var topDown by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
+    var gestureStartAngle by remember { mutableStateOf(0.0) }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // 3D Canvas
@@ -52,8 +53,15 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                     }
                 }
                 .pointerInput(Unit) {
-                    detectTransformGestures { _, _, gestureZoom, _ ->
+                    detectTransformGestures { _, _, gestureZoom, gestureRotation ->
+                        // zoom and rotation are cumulative per gesture
+                        // (starting at 1.0 / 0.0) — capture the base angle
+                        // at gesture start so rotation is absolute
+                        if (gestureZoom == 1f && gestureRotation == 0f) {
+                            gestureStartAngle = vm.viewAngle.value.toDouble()
+                        }
                         vm.zoomPreviewBy(gestureZoom.toDouble())
+                        vm.setViewAngle(gestureStartAngle + gestureRotation.toDouble())
                     }
                 }
         ) {

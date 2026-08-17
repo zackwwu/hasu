@@ -25,6 +25,33 @@ struct IsometricCanvas {
         // Order surfaces back-to-front (painter's algorithm)
         let ordered = projection.orderSurfaces(surfaces: surfaces, viewAngle: Int32(viewAngle)) as? [Surface] ?? surfaces
 
+        // Drop shadow: floor silhouette offset down-right, drawn first
+        if let floor = surfaces.first(where: { $0.type == SurfaceType.floor }) {
+            let shadowCorners = projectCorners(
+                projection: projection,
+                surface: floor,
+                viewAngle: viewAngle,
+                originX: fit.originX,
+                originY: fit.originY,
+                scale: fit.scale * zoom,
+                count: 4
+            )
+            var shadowPath = Path()
+            let offset: CGFloat = max(4, 10 * CGFloat(zoom))
+            shadowPath.move(to: CGPoint(
+                x: shadowCorners[0].x + offset,
+                y: shadowCorners[0].y + offset * 1.4
+            ))
+            for i in 1..<shadowCorners.count {
+                shadowPath.addLine(to: CGPoint(
+                    x: shadowCorners[i].x + offset,
+                    y: shadowCorners[i].y + offset * 1.4
+                ))
+            }
+            shadowPath.closeSubpath()
+            context.fill(shadowPath, with: .color(.black.opacity(0.15)))
+        }
+
         for surface in ordered {
             let corners = projectCorners(
                 projection: projection,
@@ -45,11 +72,11 @@ struct IsometricCanvas {
             path.closeSubpath()
 
             let isSelected = surface.id == selectedSurfaceId
-            let fillColor = surfaceFillColor(surface: surface, isSelected: isSelected)
+            let fillColor = surfaceFillColor(surface: surface, isSelected: isSelected, light: lightFactor(for: surface, viewAngle: viewAngle))
             context.fill(path, with: .color(fillColor))
 
-            let strokeWidth: CGFloat = isSelected ? 3.0 : 1.0
-            let strokeColor: Color = isSelected ? .blue : .gray.opacity(0.5)
+            let strokeWidth: CGFloat = isSelected ? 3.0 : 1.2
+            let strokeColor: Color = isSelected ? .blue : Color(red: 0.62, green: 0.58, blue: 0.52)
             context.stroke(path, with: .color(strokeColor), lineWidth: strokeWidth)
 
             // Draw surface label at centroid
@@ -88,18 +115,36 @@ struct IsometricCanvas {
         return points
     }
 
-    private static func surfaceFillColor(surface: Surface, isSelected: Bool) -> Color {
+    private static func surfaceFillColor(surface: Surface, isSelected: Bool, light: Double) -> Color {
         if isSelected {
-            return .blue.opacity(0.25)
+            return Color(red: 0.0, green: 0.74, blue: 0.83).opacity(0.33)
         }
+        let factor = CGFloat(light)
         switch surface.type {
         case SurfaceType.wall:
-            return .gray.opacity(0.15)
+            // warm beige, shaded per face orientation
+            return Color(
+                red: 0xE8 / 255.0 * factor,
+                green: 0xE0 / 255.0 * factor,
+                blue: 0xD8 / 255.0 * factor
+            )
         case SurfaceType.floor:
-            return .brown.opacity(0.1)
+            return Color(
+                red: 0xD4 / 255.0 * (0.9 + 0.1 * factor),
+                green: 0xC8 / 255.0 * (0.9 + 0.1 * factor),
+                blue: 0xB8 / 255.0 * (0.9 + 0.1 * factor)
+            )
         default:
-            return .gray.opacity(0.1)
+            return .gray.opacity(0.15)
         }
+    }
+
+    private static func lightFactor(for surface: Surface, viewAngle: Int) -> Double {
+        let projection = IsometricProjection()
+        return projection.faceLightFactor(
+            surface: surface,
+            viewAngle: Int32(viewAngle)
+        )
     }
 
     private static func surfaceLabel(surface: Surface) -> String {

@@ -65,6 +65,20 @@ final class IOSRoomEditorViewModel: ObservableObject {
         refresh()
     }
 
+    func rotateViewBy(_ deltaDegrees: Double) {
+        sharedVM.rotateViewBy(deltaDegrees: deltaDegrees)
+        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
+            viewAngle = kotlinInt.intValue
+        }
+    }
+
+    func setViewAngle(_ angle: Double) {
+        sharedVM.setViewAngle(angle: angle)
+        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
+            viewAngle = kotlinInt.intValue
+        }
+    }
+
     func zoomPreviewBy(_ factor: Double) {
         sharedVM.zoomPreviewBy(factor: factor)
         previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0

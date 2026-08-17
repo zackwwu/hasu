@@ -112,6 +112,14 @@ fun GroutColor.toArgb(): Int = when (this) {
     GroutColor.WHITE -> android.graphics.Color.WHITE
 }
 
+// Shade an RGB color by a 0..1 light factor for isometric face shading
+private fun shadedArgb(r: Int, g: Int, b: Int, factor: Float): Int =
+    android.graphics.Color.rgb(
+        (r * factor).toInt().coerceIn(0, 255),
+        (g * factor).toInt().coerceIn(0, 255),
+        (b * factor).toInt().coerceIn(0, 255),
+    )
+
 /**
  * Mirrors [com.hasu.tilelayout.ui.canvas.drawTiles] using android.graphics.Canvas
  * so the 2D layout can be rendered offscreen to a Bitmap for export.
@@ -203,12 +211,13 @@ fun drawIsometricRoomToCanvas(
         val isSelected = surface.id == selectedSurfaceId
         val isWall = surface.type == SurfaceType.WALL
 
+        val light = IsometricProjection.faceLightFactor(surface, viewAngle).toFloat()
         val fillColor = when {
-            isSelected -> 0x4400BCD4  // cyan highlight
-            isWall -> 0xFFE8E0D8      // warm beige
-            else -> 0xFFD4C8B8        // darker beige for floor
+            isSelected -> 0x5500BCD4  // cyan highlight
+            isWall -> shadedArgb(0xE8, 0xE0, 0xD8, light)
+            else -> shadedArgb(0xD4, 0xC8, 0xB8, 0.9f + 0.1f * light)
         }
-        fillPaint.color = fillColor.toInt()
+        fillPaint.color = fillColor
         canvas.drawPath(path, fillPaint)
         canvas.drawPath(path, strokePaint)
     }

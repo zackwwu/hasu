@@ -76,32 +76,7 @@ object IsometricProjection {
                 Triple(px, py, pz + h),
             )
         } else {
-            when (normalizeRotation(p.rotation)) {
-                90 -> listOf(
-                    Triple(px, py, pz),
-                    Triple(px, py, pz - w),
-                    Triple(px, py + h, pz - w),
-                    Triple(px, py + h, pz),
-                )
-                180 -> listOf(
-                    Triple(px, py, pz),
-                    Triple(px - w, py, pz),
-                    Triple(px - w, py + h, pz),
-                    Triple(px, py + h, pz),
-                )
-                270 -> listOf(
-                    Triple(px, py, pz),
-                    Triple(px, py, pz + w),
-                    Triple(px, py + h, pz + w),
-                    Triple(px, py + h, pz),
-                )
-                else -> listOf(
-                    Triple(px, py, pz),
-                    Triple(px + w, py, pz),
-                    Triple(px + w, py + h, pz),
-                    Triple(px, py + h, pz),
-                )
-            }
+            wallWorldCorners(surface).map { (x, y, z) -> Triple(x * scale, y * scale, z * scale) }
         }
         return world.map { (x, y, z) -> project(x, y, z, viewAngle, originX, originY) }
     }
@@ -109,12 +84,79 @@ object IsometricProjection {
     private fun normalizeRotation(rotation: Double): Int =
         ((rotation.toInt() % 360) + 360) % 360
 
+    /**
+     * Shading factor in [0.1, 1.0] for a surface face so both platforms
+     * render faces identically. The light follows the view azimuth:
+     * faces toward the camera are brightest, away are darkest, sides mid.
+     * Floors always get full light.
+     */
+    fun faceLightFactor(surface: Surface, viewAngle: Int): Double {
+        if (surface.type == SurfaceType.FLOOR) return 1.0
+        val rad = viewAngle * PI / 180
+        val sinA = sin(rad); val cosA = cos(rad)
+
+        // Outward face normal in the X-Z plane for each wall rotation
+        val (nx, nz) = when (normalizeRotation(surface.position.rotation)) {
+            90 -> -1.0 to 0.0    // left wall faces -X
+            180 -> 0.0 to -1.0   // back wall faces -Z
+            270 -> 1.0 to 0.0    // right wall faces +X
+            else -> 0.0 to 1.0   // front wall faces +Z
+        }
+
+        // Light direction matches the camera azimuth
+        val lightX = sinA
+        val lightZ = cosA
+        val len = sqrt(lightX * lightX + lightZ * lightZ)
+        if (len < 1e-6) return 0.55
+        val dot = (nx * lightX + nz * lightZ) / len
+        return 0.55 + 0.45 * dot
+    }
+
     fun orderSurfaces(surfaces: List<Surface>, viewAngle: Int): List<Surface> {
         val rad = viewAngle * PI / 180
+        val sinA = sin(rad); val cosA = cos(rad)
         val floors = surfaces.filter { it.type == SurfaceType.FLOOR }
         val walls = surfaces.filter { it.type == SurfaceType.WALL }
-            .sortedBy { it.position.x * sin(rad) + it.position.z * cos(rad) }
+            .sortedBy { surface ->
+                // Painter's key: the wall's NEAREST corner along the view axis.
+                // Sorting by the anchor position misorders rotated walls
+                // (e.g. the left wall's anchor is its far corner, so it
+                // would draw on top of everything).
+                wallWorldCorners(surface).minOf { (x, _, z) -> x * sinA + z * cosA }
+            }
         return floors + walls
+    }
+
+    /** World-space corners of a wall (x, y up, z) respecting its rotation. */
+    private fun wallWorldCorners(surface: Surface): List<Triple<Double, Double, Double>> {
+        val p = surface.position
+        val w = surface.width; val h = surface.height
+        return when (normalizeRotation(p.rotation)) {
+            90 -> listOf(
+                Triple(p.x, p.y, p.z),
+                Triple(p.x, p.y, p.z - w),
+                Triple(p.x, p.y + h, p.z - w),
+                Triple(p.x, p.y + h, p.z),
+            )
+            180 -> listOf(
+                Triple(p.x, p.y, p.z),
+                Triple(p.x - w, p.y, p.z),
+                Triple(p.x - w, p.y + h, p.z),
+                Triple(p.x, p.y + h, p.z),
+            )
+            270 -> listOf(
+                Triple(p.x, p.y, p.z),
+                Triple(p.x, p.y, p.z + w),
+                Triple(p.x, p.y + h, p.z + w),
+                Triple(p.x, p.y + h, p.z),
+            )
+            else -> listOf(
+                Triple(p.x, p.y, p.z),
+                Triple(p.x + w, p.y, p.z),
+                Triple(p.x + w, p.y + h, p.z),
+                Triple(p.x, p.y + h, p.z),
+            )
+        }
     }
 
     fun pointInPolygon(px: Double, py: Double, polygon: List<ScreenPoint>): Boolean {

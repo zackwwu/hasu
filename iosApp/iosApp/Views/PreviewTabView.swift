@@ -7,6 +7,7 @@ struct PreviewTabView: View {
     @State private var topDown = false
     @State private var showExportSheet = false
     @State private var zoomAtGestureStart: Double = 1.0
+    @State private var rotationAtGestureStart: Double = 0.0
 
     var body: some View {
         VStack(spacing: 0) {
@@ -43,6 +44,17 @@ struct PreviewTabView: View {
                                 zoomAtGestureStart = vm.previewZoom
                             }
                             vm.setPreviewZoom(zoomAtGestureStart * value.magnification)
+                        }
+                )
+                .simultaneousGesture(
+                    RotateGesture()
+                        .onChanged { value in
+                            // rotation is cumulative per gesture, starting at 0
+                            if value.rotation == .zero {
+                                rotationAtGestureStart = Double(vm.viewAngle)
+                            }
+                            // positive rotation = counterclockwise on screen
+                            vm.setViewAngle(rotationAtGestureStart - value.rotation.degrees)
                         }
                 )
             }
