@@ -108,7 +108,7 @@ fun RoomEditorScreen(
                 )
                 1 -> LayoutTab(vm = vm)
                 2 -> PreviewTab(vm = vm)
-                3 -> CutListTab(roomId = roomId)
+                3 -> CutListTab(vm = vm)
             }
         }
     }

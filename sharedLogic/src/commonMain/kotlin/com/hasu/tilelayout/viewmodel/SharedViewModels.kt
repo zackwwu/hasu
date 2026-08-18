@@ -1,5 +1,6 @@
 package com.hasu.tilelayout.viewmodel
 
+import com.hasu.tilelayout.cutlist.CutListGenerator
 import com.hasu.tilelayout.db.LayoutResultRepository
 import com.hasu.tilelayout.db.ProjectRepository
 import com.hasu.tilelayout.db.RoomRepository
@@ -7,6 +8,7 @@ import com.hasu.tilelayout.db.SurfaceRepository
 import com.hasu.tilelayout.db.TileGroupRepository
 import com.hasu.tilelayout.engine.IsometricProjection
 import com.hasu.tilelayout.engine.LayoutEngine
+import com.hasu.tilelayout.models.CutEntry
 import com.hasu.tilelayout.models.LayoutResult
 import com.hasu.tilelayout.models.PlacedTile
 import com.hasu.tilelayout.models.Project
@@ -60,10 +62,6 @@ class RoomEditorViewModel(
     private val scope: CoroutineScope,
     private val debounceMs: Long = LAYOUT_DEBOUNCE_MS,
 ) {
-    companion object {
-        const val LAYOUT_DEBOUNCE_MS = 100L
-    }
-
     // -- StateFlows --
 
     private val _surfaces = MutableStateFlow<List<Surface>>(emptyList())
@@ -74,6 +72,29 @@ class RoomEditorViewModel(
 
     private val _viewAngle = MutableStateFlow(0)
     val viewAngle: StateFlow<Int> = _viewAngle
+
+    /** Pinch-zoom multiplier for the 3D preview (1.0 = fit-to-canvas). Transient, not persisted. */
+    private val _previewZoom = MutableStateFlow(1.0)
+    val previewZoom: StateFlow<Double> = _previewZoom
+
+    fun zoomPreviewBy(factor: Double) {
+        val zoomed = (_previewZoom.value * factor).coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+        _previewZoom.value = zoomed
+    }
+
+    fun setPreviewZoom(zoom: Double) {
+        _previewZoom.value = zoom.coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+    }
+
+    fun resetPreviewZoom() {
+        _previewZoom.value = 1.0
+    }
+
+    companion object {
+        const val LAYOUT_DEBOUNCE_MS = 100L
+        const val MIN_PREVIEW_ZOOM = 0.5
+        const val MAX_PREVIEW_ZOOM = 4.0
+    }
 
     private val _lockedSurfaceIds = MutableStateFlow<Set<String>>(emptySet())
     val lockedSurfaceIds: StateFlow<Set<String>> = _lockedSurfaceIds
@@ -86,6 +107,9 @@ class RoomEditorViewModel(
     private val _currentTiles = MutableStateFlow<List<PlacedTile>>(emptyList())
     val currentTiles: StateFlow<List<PlacedTile>> = _currentTiles
 
+    private val _cutEntries = MutableStateFlow<List<CutEntry>>(emptyList())
+    val cutEntries: StateFlow<List<CutEntry>> = _cutEntries
+
     private val pendingLayoutJobs = mutableMapOf<String, Job>()
 
     // -- Public API --
@@ -93,6 +117,7 @@ class RoomEditorViewModel(
     suspend fun loadSurfaces(roomId: String) {
         _surfaces.value = surfaceRepo.getByRoom(roomId)
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
+        recomputeCutEntries()
     }
 
     suspend fun selectSurface(id: String?) {
@@ -106,6 +131,16 @@ class RoomEditorViewModel(
 
     fun rotateView(delta: Int) {
         _viewAngle.value = ((_viewAngle.value + delta) % 360 + 360) % 360
+    }
+
+    /** Rotate by an arbitrary (non-90-multiple) delta in degrees — for touch gestures. */
+    fun rotateViewBy(deltaDegrees: Double) {
+        _viewAngle.value = (((_viewAngle.value + deltaDegrees).toInt() % 360) + 360) % 360
+    }
+
+    /** Set the view angle to an absolute value in degrees. */
+    fun setViewAngle(angle: Double) {
+        _viewAngle.value = (((angle.toInt() % 360) + 360) % 360)
     }
 
     fun toggleLock(surfaceId: String) {
@@ -139,16 +174,25 @@ class RoomEditorViewModel(
         val selectedId = _selectedSurfaceId.value ?: return
         val selected = _surfaces.value.find { it.id == selectedId } ?: return
 
+        val affectedIds = mutableSetOf(selectedId)
         applyOffset(selectedId, dx, dy)
 
         for (lockedId in dragLockedIds) {
             val locked = _surfaces.value.find { it.id == lockedId } ?: continue
             val (propDx, propDy) = propagateDelta(selected, locked, dx, dy)
             if (propDx != 0.0 || propDy != 0.0) {
+                affectedIds.add(lockedId)
                 applyOffset(lockedId, propDx, propDy)
             }
         }
         dragLockedIds = emptySet()
+
+        // onDragEnd is the final drag position — bypass the debounce and compute immediately
+        // so platform wrappers can refresh reactively without a fixed-delay hack.
+        for (surfaceId in affectedIds) {
+            cancelPendingLayout(surfaceId)
+            computeLayout(surfaceId)
+        }
     }
 
     private fun normalizedRotationBucket(rotation: Double): Int {
@@ -287,11 +331,46 @@ class RoomEditorViewModel(
         if (surfaceId == _selectedSurfaceId.value) {
             _currentTiles.value = tiles
         }
+        recomputeCutEntries()
     }
 
     private suspend fun loadLayoutForSurface(surfaceId: String) {
         val result = layoutRepo.getBySurface(surfaceId)
         _currentTiles.value = result?.tiles ?: emptyList()
+    }
+
+    // -- Cut list --
+
+    /**
+     * Regenerates the room-wide cut list from the latest layout results for all
+     * loaded surfaces. Called after every [computeLayout] so the cut list tab
+     * stays fresh without any per-platform refresh logic.
+     */
+    private suspend fun recomputeCutEntries() {
+        val surfaces = _surfaces.value
+        if (surfaces.isEmpty()) {
+            _cutEntries.value = emptyList()
+            return
+        }
+
+        val resultsBySurface = mutableMapOf<String, LayoutResult>()
+        val surfaceNames = mutableMapOf<String, String>()
+        val tileGroupNames = mutableMapOf<String, String>()
+
+        for (surface in surfaces) {
+            surfaceNames[surface.id] =
+                "${if (surface.type == SurfaceType.WALL) "Wall" else "Floor"} ${surface.width.toInt()}×${surface.height.toInt()}"
+            val result = layoutRepo.getBySurface(surface.id) ?: continue
+            resultsBySurface[surface.id] = result
+            for (tile in result.tiles) {
+                if (!tileGroupNames.containsKey(tile.tileGroupId)) {
+                    tileGroupNames[tile.tileGroupId] =
+                        tileGroupRepo.getById(tile.tileGroupId)?.name ?: tile.tileGroupId
+                }
+            }
+        }
+
+        _cutEntries.value = CutListGenerator.generate(resultsBySurface, surfaceNames, tileGroupNames)
     }
 
     // -- 3D Hit Testing --
@@ -302,13 +381,15 @@ class RoomEditorViewModel(
         canvasWidth: Double,
         canvasHeight: Double,
     ): String? {
-        val originX = canvasWidth / 2.0
-        val originY = canvasHeight * 0.6
+        val fit = IsometricProjection.fitViewport(
+            _surfaces.value, _viewAngle.value, canvasWidth, canvasHeight,
+        )
+        val scale = fit.scale * _previewZoom.value
 
         val ordered = IsometricProjection.orderSurfaces(_surfaces.value, _viewAngle.value)
         for (surface in ordered.reversed()) {
             val corners = IsometricProjection.projectSurfaceCorners(
-                surface, _viewAngle.value, originX, originY,
+                surface, _viewAngle.value, fit.originX, fit.originY, scale,
             )
             if (IsometricProjection.pointInPolygon(tapX, tapY, corners)) {
                 return surface.id

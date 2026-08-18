@@ -30,6 +30,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.hasu.tilelayout.data.AppDatabase
@@ -79,11 +81,11 @@ fun SurfacesListView(
             EmptyState(
                 title = "No Surfaces",
                 hint = "Generate the room's wall and floor surfaces from its dimensions.",
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
             )
         } else {
             LazyColumn(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.weight(1f),
                 contentPadding = PaddingValues(vertical = 8.dp),
             ) {
                 items(surfaces, key = { it.id }) { surface ->
@@ -99,7 +101,8 @@ fun SurfacesListView(
             onClick = { showGenerateDialog = true },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .semantics { contentDescription = "Generate Surfaces" },
         ) {
             Text("Generate Surfaces")
         }
@@ -163,10 +166,8 @@ private fun SurfaceTypeBadge(type: SurfaceType) {
     )
 }
 
-private fun surfaceName(surface: Surface): String {
-    val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
-    return "$typeName ${surface.width.toInt()}×${surface.height.toInt()}"
-}
+private fun surfaceName(surface: Surface): String =
+    "${surface.displayName()} ${surface.width.toInt()}×${surface.height.toInt()}"
 
 @Composable
 private fun GenerateSurfacesDialog(

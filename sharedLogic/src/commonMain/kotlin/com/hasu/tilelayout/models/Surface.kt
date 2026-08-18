@@ -16,4 +16,15 @@ data class Surface(
     val position: SurfacePosition,
     val groutColor: GroutColor = GroutColor.GREY,
     val groutWidth: Double = 3.0,
-)
+) {
+    /** Orientation-aware name: "Front Wall", "Left Wall", "Back Wall", "Right Wall", "Floor". */
+    fun displayName(): String = when (type) {
+        SurfaceType.FLOOR -> "Floor"
+        SurfaceType.WALL -> when (((position.rotation.toInt() % 360) + 360) % 360) {
+            90 -> "Left Wall"
+            180 -> "Back Wall"
+            270 -> "Right Wall"
+            else -> "Front Wall"
+        }
+    }
+}

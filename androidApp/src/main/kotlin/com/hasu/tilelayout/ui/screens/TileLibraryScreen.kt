@@ -41,6 +41,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -83,7 +84,10 @@ fun TileLibraryScreen(
 
     Scaffold(
         floatingActionButton = {
-            FloatingActionButton(onClick = { showAdd = true }) {
+            FloatingActionButton(
+                onClick = { showAdd = true },
+                modifier = Modifier.testTag("add-tile-group"),
+            ) {
                 Text("+", style = MaterialTheme.typography.headlineSmall)
             }
         },
@@ -268,6 +272,7 @@ private fun AddTileGroupDialog(
                     onValueChange = { name = it },
                     label = { Text("Tile name") },
                     singleLine = true,
+                    modifier = Modifier.testTag("tile-name-field"),
                 )
                 TileDimensionField("Width (mm)", width, { width = it })
                 TileDimensionField("Height (mm)", height, { height = it })

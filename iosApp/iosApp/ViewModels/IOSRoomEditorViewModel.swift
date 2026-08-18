@@ -11,9 +11,11 @@ final class IOSRoomEditorViewModel: ObservableObject {
     @Published var surfaces: [Surface] = []
     @Published var selectedSurfaceId: String? = nil
     @Published var viewAngle: Int = 0
+    @Published var previewZoom: Double = 1.0
     @Published var lockedSurfaceIds: Set<String> = []
     @Published var hasUndoBuffer = false
     @Published var currentTiles: [PlacedTile] = []
+    @Published var cutEntries: [CutEntry] = []
     @Published var isDragging = false
 
     private let db: TileLayoutDb = DatabaseProvider.shared.createTileLayoutDb()
@@ -63,6 +65,35 @@ final class IOSRoomEditorViewModel: ObservableObject {
         refresh()
     }
 
+    func rotateViewBy(_ deltaDegrees: Double) {
+        sharedVM.rotateViewBy(deltaDegrees: deltaDegrees)
+        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
+            viewAngle = kotlinInt.intValue
+        }
+    }
+
+    func setViewAngle(_ angle: Double) {
+        sharedVM.setViewAngle(angle: angle)
+        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
+            viewAngle = kotlinInt.intValue
+        }
+    }
+
+    func zoomPreviewBy(_ factor: Double) {
+        sharedVM.zoomPreviewBy(factor: factor)
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+    }
+
+    func setPreviewZoom(_ zoom: Double) {
+        sharedVM.setPreviewZoom(zoom: zoom)
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+    }
+
+    func resetPreviewZoom() {
+        sharedVM.resetPreviewZoom()
+        previewZoom = 1.0
+    }
+
     func toggleLock(_ id: String) {
         sharedVM.toggleLock(surfaceId: id)
         refresh()
@@ -79,12 +110,23 @@ final class IOSRoomEditorViewModel: ObservableObject {
 
     func onDragEnd(dx: Double, dy: Double) async {
         do {
+            // The shared VM computes the layout synchronously inside onDragEnd,
+            // so a plain refresh reads the fresh tiles — no sleep hack needed.
             try await sharedVM.onDragEnd(dx: dx, dy: dy)
-            // Allow the debounced layout compute in shared VM to fire
-            try await Task.sleep(nanoseconds: 150_000_000)
             refresh()
         } catch {
             print("onDragEnd failed: \(error)")
+        }
+    }
+
+    /// Synchronously recompute the layout for a surface, then refresh.
+    /// Used as the reactive path after mutations that bypass the debounce.
+    func computeAndRefresh(surfaceId: String) async {
+        do {
+            try await sharedVM.computeLayout(surfaceId: surfaceId)
+            refresh()
+        } catch {
+            print("computeAndRefresh failed: \(error)")
         }
     }
 
@@ -159,8 +201,7 @@ final class IOSRoomEditorViewModel: ObservableObject {
     }
 
     func displayName(for surface: Surface) -> String {
-        let typeName = surface.type == SurfaceType.wall ? "Wall" : "Floor"
-        return "\(typeName) \(Int(surface.width))×\(Int(surface.height))"
+        "\(surface.displayName()) \(Int(surface.width))×\(Int(surface.height))"
     }
 
     // MARK: - Private
@@ -171,8 +212,10 @@ final class IOSRoomEditorViewModel: ObservableObject {
         if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
             viewAngle = kotlinInt.intValue
         }
+        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
         lockedSurfaceIds = Set((sharedVM.lockedSurfaceIds.value as? Set<AnyHashable>)?.compactMap { $0 as? String } ?? [])
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
+        cutEntries = sharedVM.cutEntries.value as? [CutEntry] ?? []
         hasUndoBuffer = sharedVM.undoBuffer.value != nil
     }
 }

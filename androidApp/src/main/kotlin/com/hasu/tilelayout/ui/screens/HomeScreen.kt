@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.hasu.tilelayout.data.AppDatabase
@@ -63,7 +64,10 @@ fun HomeScreen(onProjectClick: (String) -> Unit) {
     Scaffold(
         topBar = { TopAppBar(title = { Text("Projects") }) },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreateDialog = true }) {
+            FloatingActionButton(
+                onClick = { showCreateDialog = true },
+                modifier = Modifier.testTag("add-project"),
+            ) {
                 Text("+", style = MaterialTheme.typography.headlineSmall)
             }
         },

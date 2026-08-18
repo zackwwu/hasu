@@ -28,6 +28,7 @@ struct HomeView: View {
                 } label: {
                     Image(systemName: "plus")
                 }
+                .accessibilityIdentifier("add-project")
             }
             .sheet(isPresented: $vm.showCreate) {
                 CreateProjectSheet(vm: vm)

@@ -1,0 +1,145 @@
+# Maestro flow: Phase 9 — Export Pipeline Verification
+#
+# Runs on both iOS and Android.
+#
+# iOS:      maestro test .maestro/phase-9-export.yaml -p ios -e APP_ID=zackwwu.hasu.TileLayout
+# Android:  maestro test .maestro/phase-9-export.yaml -p android -e APP_ID=com.hasu.tilelayout
+
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: true
+
+# ── Home screen ──
+- assertVisible: "Projects"
+
+# ── Create a test project ──
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "add-project"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "+"
+- tapOn: "Project name"
+- inputText: "Maestro Test"
+- tapOn: "Create"
+- assertVisible: "Maestro Test"
+- tapOn: "Maestro Test"
+
+# ── Project detail: add tile group ──
+- tapOn: "Tile Library"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "add-tile-group"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "+"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "tile-name-field"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "Tile name"
+- inputText: "Ceramic White"
+- tapOn: "Add"
+- assertVisible: "Ceramic White"
+
+# ── Add a room ──
+- tapOn: "Rooms"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "add-room"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "+"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "room-name-field"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "Room name"
+- inputText: "Bathroom"
+- tapOn: "Add"
+- assertVisible: "Bathroom"
+- tapOn: "Bathroom"
+
+# ── Room editor: generate surfaces ──
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - assertVisible: "Room Editor"
+      - tapOn: "Generate Surfaces"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - assertVisible: "Bathroom"
+      - tapOn: "Generate Surfaces"
+      - tapOn: "Generate"
+
+# ── Switch to Layout tab ──
+- tapOn: "Layout"
+- takeScreenshot: layout-tab
+
+# ── Switch to Preview tab ──
+- tapOn: "Preview"
+- takeScreenshot: preview-tab
+
+# ── Rotate view ──
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "rotate-right"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "▶"
+- takeScreenshot: preview-rotated
+
+# ── Switch to Cut List tab ──
+- tapOn: "Cut List"
+- takeScreenshot: cutlist-tab
+
+# ── Navigate back ──
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Maestro Test"
+      - tapOn: "Maestro Test"
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "←"
+      - tapOn: "←"
+- assertVisible: "Maestro Test"

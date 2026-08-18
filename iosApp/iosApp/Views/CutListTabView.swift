@@ -1,26 +1,18 @@
 import SwiftUI
 import SharedLogic
 
-/// Cut list tab showing grouped cut entries for the selected surface,
+/// Cut list tab showing grouped cut entries for the room's surfaces,
 /// ordered by tile group and then cut dimension (largest first).
+///
+/// The entries are computed in the shared `RoomEditorViewModel` after every
+/// layout computation and bridged through `IOSRoomEditorViewModel.cutEntries`,
+/// so this view stays fresh reactively — no per-appear regeneration needed.
 struct CutListTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
 
-    @State private var cutEntries: [CutEntry] = []
-
-    private let surfaceRepo: SurfaceRepository
-    private let layoutRepo: LayoutResultRepository
-
-    init(vm: IOSRoomEditorViewModel) {
-        self.vm = vm
-        let database = DatabaseProvider.shared.createTileLayoutDb()
-        self.surfaceRepo = SqlDelightSurfaceRepository(queries: database.tileLayoutDbQueries)
-        self.layoutRepo = SqlDelightLayoutResultRepository(queries: database.tileLayoutDbQueries)
-    }
-
     var body: some View {
         Group {
-            if cutEntries.isEmpty {
+            if vm.cutEntries.isEmpty {
                 ContentUnavailableView(
                     "No Cuts Required",
                     systemImage: "scissors",
@@ -28,56 +20,11 @@ struct CutListTabView: View {
                 )
             } else {
                 List {
-                    ForEach(Array(cutEntries.enumerated()), id: \.offset) { _, entry in
+                    ForEach(Array(vm.cutEntries.enumerated()), id: \.offset) { _, entry in
                         CutEntrySection(entry: entry)
                     }
                 }
             }
-        }
-        .onChange(of: vm.selectedSurfaceId) { _, _ in
-            Task { await generateCutList() }
-        }
-        .onChange(of: vm.currentTiles.count) { _, _ in
-            Task { await generateCutList() }
-        }
-        .task { await generateCutList() }
-    }
-
-    private func generateCutList() async {
-        guard let surfaceId = vm.selectedSurfaceId else {
-            cutEntries = []
-            return
-        }
-        do {
-            guard let result = try await layoutRepo.getBySurface(surfaceId: surfaceId) else {
-                cutEntries = []
-                return
-            }
-
-            var surfaceNames: [String: String] = [:]
-            for surface in vm.surfaces {
-                surfaceNames[surface.id] = vm.displayName(for: surface)
-            }
-
-            var tileGroupNames: [String: String] = [:]
-            let cutTiles = result.tiles.filter { ($0 as? PlacedTile)?.isCut ?? false }
-            for tile in cutTiles {
-                if let tile = tile as? PlacedTile, tileGroupNames[tile.tileGroupId] == nil {
-                    tileGroupNames[tile.tileGroupId] = tile.tileGroupId
-                }
-            }
-
-            let generator = CutListGenerator()
-            let entries = generator.generate(
-                resultsBySurface: [surfaceId: result],
-                surfaceNames: surfaceNames,
-                tileGroupNames: tileGroupNames
-            ) as? [CutEntry] ?? []
-
-            cutEntries = entries
-        } catch {
-            print("Generate cut list failed: \(error)")
-            cutEntries = []
         }
     }
 }

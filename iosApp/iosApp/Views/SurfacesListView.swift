@@ -169,8 +169,7 @@ private struct SurfaceRow: View {
     }
 
     private var displayName: String {
-        let typeName = surface.type == SurfaceType.wall ? "Wall" : "Floor"
-        return "\(typeName) \(Int(surface.width))×\(Int(surface.height))"
+        "\(surface.displayName()) \(Int(surface.width))×\(Int(surface.height))"
     }
 
     private var groutColor: Color {
