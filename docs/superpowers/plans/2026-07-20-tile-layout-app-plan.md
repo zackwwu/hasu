@@ -1652,7 +1652,215 @@ git commit -m "feat: integration pipeline, PNG export on both platforms"
 
 ---
 
-## Phase 10: Edge Detection (Tile Texture Scanning)
+## Phase 10: Door Wall Feature
+
+**Goal:** Let the user specify which wall the room's door is on. Wall names become relative to the door ("Door Wall", "Front Wall" = the wall you face when entering, sides "Left/Right Wall"), the door renders as an opening in the 3D preview, and the layout engine skips tiles in the door area (with cut edges for the cut list).
+
+**Scope decisions:**
+- One door per room. Door defaults: 900×2100 mm, offset centered on the wall at selection time.
+- Wall picker labels use coordinate names ("Front Wall" = z=0 wall) because door-relative names only exist once a door is set.
+- Door sits on the floor: in surface-local coordinates the door rect is always `(doorOffset, 0, doorWidth, doorHeight)`.
+
+### Task 21: Room door fields — schema migration + model
+
+- [ ] **Step 1: Write `2.sqm` migration**
+
+`sharedLogic/src/commonMain/sqldelight/com/hasu/tilelayout/db/2.sqm`:
+```sql
+ALTER TABLE rooms ADD COLUMN door_wall TEXT;
+ALTER TABLE rooms ADD COLUMN door_width REAL;
+ALTER TABLE rooms ADD COLUMN door_height REAL;
+ALTER TABLE rooms ADD COLUMN door_offset REAL;
+```
+
+- [ ] **Step 2: Update `rooms` queries in TileLayoutDb.sq**
+
+`getRoomsByProject` / `getRoomById` select the new columns; `insertRoom` writes them. Add `updateRoomDoor`:
+```sql
+updateRoomDoor:
+UPDATE rooms SET door_wall = ?, door_width = ?, door_height = ?, door_offset = ?
+WHERE id = ?;
+```
+
+- [ ] **Step 3: Update Room model + RoomRepository**
+
+```kotlin
+// Room.kt
+data class Room(
+    val id: String = uuid4(),
+    val projectId: String,
+    val name: String,
+    val width: Double, val depth: Double, val height: Double,
+    val doorWall: Double? = null,      // rotation of the door wall (0/90/180/270)
+    val doorWidth: Double = 900.0,
+    val doorHeight: Double = 2100.0,
+    val doorOffset: Double? = null,    // distance from wall anchor corner; null = centered
+)
+```
+
+RoomRepository gains `suspend fun updateDoor(roomId: String, doorWall: Double?, doorWidth: Double, doorHeight: Double, doorOffset: Double?)`.
+
+- [ ] **Step 4: Wire migration callbacks**
+
+- Android `AppDatabase.kt`: `AndroidSqliteDriver(TileLayoutDb.Schema, context, "tilelayout.db", callback = AndroidSqliteDriver.Callback(TileLayoutDb.Schema) { _, oldV, newV -> TileLayoutDb.Schema.migrate(it, oldV, newV) })`
+- iOS `DatabaseProvider.kt`: same via `NativeSqliteDriver` callback.
+
+- [ ] **Step 5: Commit**
+
+```bash
+git commit -m "feat: room door fields with SQLDelight 1→2 migration"
+```
+
+### Task 22: Door-relative wall naming
+
+- [ ] **Step 1: Surface gains a transient doorRotation**
+
+```kotlin
+// Surface.kt
+data class Surface(
+    ...
+    val doorRotation: Double? = null,  // transient: populated from the room at query time
+) {
+    fun displayName(): String = when (type) {
+        SurfaceType.FLOOR -> "Floor"
+        SurfaceType.WALL -> {
+            val r = normalizedRotation(position.rotation)
+            val d = doorRotation
+            if (d == null) coordinateName(r)  // current Front/Back/Left/Right by convention
+            else when (normalizedRotation(r - d)) {
+                0 -> "Door Wall"
+                90 -> "Left Wall"
+                180 -> "Front Wall"
+                270 -> "Right Wall"
+                else -> coordinateName(r)
+            }
+        }
+    }
+}
+```
+
+- [ ] **Step 2: Repository JOIN**
+
+`getSurfacesByRoom` joins rooms:
+```sql
+getSurfacesByRoom:
+SELECT s.*, r.door_wall FROM surfaces s
+JOIN rooms r ON r.id = s.room_id
+WHERE s.room_id = ?;
+```
+`SqlDelightSurfaceRepository.getByRoom()` maps `door_wall` → `Surface.doorRotation`.
+
+- [ ] **Step 3: Update tests**
+
+`SurfaceDisplayNameTest` gains door-relative cases: door on 0 → wall 0 "Door Wall", wall 180 "Front Wall", wall 90 "Left Wall", wall 270 "Right Wall"; no door → coordinate names.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git commit -m "feat: door-relative wall names"
+```
+
+### Task 23: Door geometry + 3D preview rendering
+
+- [ ] **Step 1: Shared DoorGeometry helper**
+
+```kotlin
+// engine/DoorGeometry.kt
+object DoorGeometry {
+    /** Door rect in surface-local coords (x along wall, y from floor up). */
+    fun surfaceLocalRect(room: Room, surface: Surface): RegionRect? {
+        val wall = room.doorWall ?: return null
+        if (normalize(wall) != normalize(surface.position.rotation)) return null
+        val offset = room.doorOffset ?: (surface.width - room.doorWidth) / 2.0
+        return RegionRect(offset, 0.0, room.doorWidth, room.doorHeight)
+    }
+
+    /** Door rectangle as world-space corners, for the 3D preview. */
+    fun worldCorners(room: Room, surface: Surface): List<Triple<Double, Double, Double>>?
+}
+```
+
+World corners reuse the wall's rotation rules: the door offset runs along the wall's span direction from the anchor corner.
+
+- [ ] **Step 2: Draw door opening on both canvases**
+
+After the wall loop in Android `drawIsometricRoom` and iOS `IsometricCanvas.drawIsometricRoom`: if the surface is the door wall, project the door's world corners, fill a dark opening rect (`0xFF3A3A3A` / dark gray), stroke it lighter. Draw the opening after the wall fill so it reads as a cutout.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "feat: door opening rendered in 3D preview"
+```
+
+### Task 24: Layout exclusion
+
+- [ ] **Step 1: LayoutEngine exclusions parameter**
+
+```kotlin
+fun compute(
+    region: RegionRect,
+    tileGroup: TileGroup,
+    groutWidth: Double,
+    pattern: TilePattern,
+    offsetX: Double,
+    offsetY: Double,
+    exclusions: List<RegionRect> = emptyList(),
+): List<PlacedTile>
+```
+
+All three algorithms (grid, brick, herringbone): after computing a tile's rect, skip it if it intersects any exclusion; otherwise add cut-edge flags for edges adjacent to an exclusion boundary (LEFT/RIGHT/TOP/BOTTOM as appropriate), merged with existing region-boundary cuts.
+
+- [ ] **Step 2: Wire into computeLayout**
+
+`RoomEditorViewModel.computeLayout()`: load the room (`roomRepo.getById(surface.roomId)`), compute the door's surface-local rect via `DoorGeometry.surfaceLocalRect(room, surface)`, pass it as the exclusion.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "feat: layout engine skips door area with cut edges"
+```
+
+### Task 25: Door configuration UI (both platforms)
+
+- [ ] **Step 1: Android — Door section in SurfacesListView**
+
+Below the room dimensions text / above the surface list: a "Door" card with:
+- Wall picker: FilterChips — None / Front Wall / Back Wall / Left Wall / Right Wall (coordinate names)
+- Width + Height fields (defaults 900 / 2100 mm)
+- Offset field (auto-centers on wall selection; editable)
+- Save via `RoomRepository.updateDoor()`, then reload surfaces so names refresh
+
+- [ ] **Step 2: iOS — Door section in SurfacesListView**
+
+Same section as a SwiftUI `Section("Door")` in the surfaces list: Picker (None/Front/Back/Left/Right), dimension fields, offset field; persists via `RoomRepository`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "feat: door configuration UI on both platforms"
+```
+
+### Task 26: Door feature verification
+
+- [ ] **Step 1: Shared tests**
+
+- `SurfaceDisplayNameTest`: door-relative names for all 4 door positions
+- `DoorGeometryTest`: surface-local rect for each wall rotation; centering when offset null
+- `LayoutEngineTest` additions: grid/brick/herringbone drop tiles inside the exclusion; door-adjacent tiles carry cut edges
+
+- [ ] **Step 2: Maestro + checklist**
+
+Extend `.maestro/phase-9-pipeline.yaml` (or a new `phase-10-door.yaml`): open room → set door on Front Wall → verify surfaces list shows "Door Wall" and "Front Wall" renamed → Layout tab shows gap where the door is → Preview shows the door opening. Update `docs/phase-9-verification-checklist.md`.
+
+- [ ] **Step 3: Commit**
+
+```bash
+git commit -m "test: door feature tests + maestro flow"
+```
+
+---
+
+## Phase 11: Edge Detection (Tile Texture Scanning)
 
 **Goal:** Scan tile textures using the device camera — detect the tile's rectangular edges in real-time, apply perspective correction, and extract a clean top-down texture image. Works like document scanning: find the rectangle → review/adjust corners → correct perspective → crop → save.
 
@@ -1665,7 +1873,7 @@ git commit -m "feat: integration pipeline, PNG export on both platforms"
 
 ---
 
-### Task 21: Edge Detection — iOS
+### Task 27: Edge Detection — iOS
 
 - [ ] **Step 1: Replace CameraView with EdgeDetectionCameraView**
 
@@ -2040,7 +2248,7 @@ git commit -m "feat(ios): edge detection tile scanner with Vision + corner revie
 
 ---
 
-### Task 22: Edge Detection — Android
+### Task 28: Edge Detection — Android
 
 **Requires:** CameraX 1.3+ (for `ImageProxy.toBitmap()`), OpenCV Android SDK 4.8.0.
 
@@ -2306,7 +2514,7 @@ git commit -m "feat(android): edge detection tile scanner with OpenCV + corner r
 
 ---
 
-### Task 23: Shared Texture Storage Path
+### Task 29: Shared Texture Storage Path
 
 - [ ] **Step 1: Add `expect` texture base directory to shared module**
 
@@ -2350,6 +2558,4 @@ git commit -m "feat: shared TextureStorage helper for captured texture file path
 
 ---
 
-**Plan updated.** 23 tasks across 10 phases. Phases 1-6 shared Kotlin. Phases 7-8 thin platform UIs. Phase 9 integration. Phase 10 edge detection with manual corner review fallback on both platforms.
-
-**Phase 10 complete.** 3 tasks: iOS edge detection (Vision + CIPerspectiveCorrection), Android edge detection (CameraX + OpenCV), and shared texture storage. The flow: open camera → detect rectangle in real-time → auto-stabilize when rect holds still → capture → perspective-correct to flat top-down image → save as PNG → update TileGroup.texturePath.
+**Plan updated.** 29 tasks across 11 phases. Phases 1-6 shared Kotlin. Phases 7-8 thin platform UIs. Phase 9 integration. Phase 10 door wall feature (door config, door-relative names, preview rendering, layout exclusion). Phase 11 edge detection with manual corner review fallback on both platforms.
