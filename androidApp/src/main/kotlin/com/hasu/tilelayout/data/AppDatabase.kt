@@ -10,7 +10,12 @@ object AppDatabase {
 
     fun init(context: Context) {
         instance = TileLayoutDb(
-            AndroidSqliteDriver(TileLayoutDb.Schema, context, "tilelayout.db")
+            AndroidSqliteDriver(
+                TileLayoutDb.Schema,
+                context,
+                "tilelayout.db",
+                callback = AndroidSqliteDriver.Callback(TileLayoutDb.Schema),
+            )
         )
     }
 }

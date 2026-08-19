@@ -35,6 +35,12 @@ class RoomEditorViewModelTest {
             require(rooms.none { it.id == room.id }) { "Duplicate room id: ${room.id}" }
             rooms.add(room)
         }
+        override suspend fun updateDoor(roomId: String, doorWall: Double?, doorWidth: Double, doorHeight: Double, doorOffset: Double?) {
+            val idx = rooms.indexOfFirst { it.id == roomId }
+            if (idx >= 0) {
+                rooms[idx] = rooms[idx].copy(doorWall = doorWall, doorWidth = doorWidth, doorHeight = doorHeight, doorOffset = doorOffset)
+            }
+        }
         override suspend fun delete(id: String) { rooms.removeAll { it.id == id } }
     }
 

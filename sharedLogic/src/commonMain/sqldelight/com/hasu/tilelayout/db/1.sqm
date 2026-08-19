@@ -1,0 +1,4 @@
+ALTER TABLE rooms ADD COLUMN door_wall TEXT;
+ALTER TABLE rooms ADD COLUMN door_width REAL;
+ALTER TABLE rooms ADD COLUMN door_height REAL;
+ALTER TABLE rooms ADD COLUMN door_offset REAL;
