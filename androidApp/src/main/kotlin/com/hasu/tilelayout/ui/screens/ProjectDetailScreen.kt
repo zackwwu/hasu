@@ -3,6 +3,8 @@ package com.hasu.tilelayout.ui.screens
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
@@ -24,6 +26,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
@@ -103,7 +106,7 @@ fun ProjectDetailScreen(
     if (showAddRoom) {
         AddRoomDialog(
             onDismiss = { showAddRoom = false },
-            onConfirm = { name, width, depth, height ->
+            onConfirm = { name, width, depth, height, doorWall ->
                 scope.launch {
                     roomRepo.insert(
                         Room(
@@ -112,6 +115,7 @@ fun ProjectDetailScreen(
                             width = width,
                             depth = depth,
                             height = height,
+                            doorWall = doorWall,
                         )
                     )
                     refreshRooms++
@@ -125,12 +129,14 @@ fun ProjectDetailScreen(
 @Composable
 private fun AddRoomDialog(
     onDismiss: () -> Unit,
-    onConfirm: (name: String, width: Double, depth: Double, height: Double) -> Unit,
+    onConfirm: (name: String, width: Double, depth: Double, height: Double, doorWall: Double?) -> Unit,
 ) {
     var name by remember { mutableStateOf("") }
     var width by remember { mutableStateOf("3000") }
     var depth by remember { mutableStateOf("4000") }
     var height by remember { mutableStateOf("2400") }
+    // Door defaults to Front (z=0) unless the user taps another edge or "None".
+    var doorWall by remember { mutableStateOf<Double?>(0.0) }
 
     val widthValue = width.toDoubleOrNull() ?: 0.0
     val depthValue = depth.toDoubleOrNull() ?: 0.0
@@ -152,11 +158,30 @@ private fun AddRoomDialog(
                 DimensionField("Width (mm)", width, { width = it })
                 DimensionField("Depth (mm)", depth, { depth = it })
                 DimensionField("Height (mm)", height, { height = it })
+
+                Text(
+                    "Door wall",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                DoorDiagram(
+                    roomWidth = widthValue,
+                    roomDepth = depthValue,
+                    selectedWall = doorWall,
+                    onWallSelected = { doorWall = it },
+                    modifier = Modifier.fillMaxWidth().height(180.dp),
+                )
+                TextButton(
+                    onClick = { doorWall = null },
+                    modifier = Modifier.align(Alignment.CenterHorizontally),
+                ) {
+                    Text("None")
+                }
             }
         },
         confirmButton = {
             TextButton(
-                onClick = { onConfirm(name.trim(), widthValue, depthValue, heightValue) },
+                onClick = { onConfirm(name.trim(), widthValue, depthValue, heightValue, doorWall) },
                 enabled = valid,
             ) {
                 Text("Add")
