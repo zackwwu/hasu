@@ -104,12 +104,80 @@ After drawing the wall polygons, both canvases draw the door on the door wall:
 
 ## UI — Door Configuration
 
-Both platforms, in the room editor's Surfaces tab:
+### Placement
 
-- **Wall picker**: None / Front Wall / Back Wall / Left Wall / Right Wall (coordinate names)
-- **Width / Height fields**: defaults 900 / 2100 mm
-- **Offset field**: auto-centers when a wall is selected; editable afterwards
-- Saving calls `RoomRepository.updateDoor()`, then reloads surfaces so names refresh everywhere
+Both platforms: **room editor → Surfaces tab**, between the room dimensions line and the surface list. On iOS the section scrolls with the list; on Android the card sits above the list. The section is always visible (also when surfaces are generated).
+
+### Android (Compose) — "Door" card
+
+An `OutlinedCard` below the room-dimensions row, above the surfaces area:
+
+```
+┌──────────────────────────────────────────────┐
+│ 🚪 Door                                        │
+│                                                │
+│ Wall:  (None) (Front) (Back) (Left) (Right)    │   ← FilterChips
+│                                                │
+│ Width (mm)   Height (mm)                       │   ← OutlinedTextFields, number keyboard
+│ [ 900      ] [ 2100     ]                      │
+│                                                │
+│ Offset from wall corner (mm)                   │
+│ [ 1050     ]  caption: "Auto-centered on wall  │   ← shown until user edits offset
+│                selection"                      │
+│                                                │
+│ [ Save Door ]  (enabled when dirty & valid)    │
+└──────────────────────────────────────────────┘
+```
+
+Component notes:
+- **Title icon**: `Text("🚪")` — no new icon dependency (material-icons-core is not in the project)
+- **Wall picker**: `FlowRow` of 5 `FilterChip`s — None, Front Wall, Back Wall, Left Wall, Right Wall (coordinate names; see caption below)
+- **Picker caption** (small, onSurfaceVariant): "Walls are listed by position — names change after saving."
+- **Width/Height/Offset**: `OutlinedTextField`s with `KeyboardType.Number`; values in mm
+- **Save Door**: `Button`, full width, enabled only when the door is dirty AND valid
+
+### iOS (SwiftUI) — "Door" section
+
+A `Section("Door")` inside the surfaces `List`:
+
+```
+DOOR
+  Wall        None ▾                        ← Menu picker
+  Width       900   mm                      ← TextField (numberPad)
+  Height      2100  mm
+  Offset      1050  mm  (Auto-centered)
+  [ Save Door ]                             ← disabled when not dirty/invalid
+```
+
+Component notes:
+- Picker: `Picker` with `.menu` style, 5 options (None / Front Wall / Back Wall / Left Wall / Right Wall)
+- Fields: `TextField` with `.keyboardType(.numberPad)` inside an `HStack` label + value
+- Same "Walls are listed by position" caption under the picker
+- Save button styled `.borderedProminent`, disabled unless dirty & valid
+
+### Interaction states
+
+| State | Picker | Fields | Save button |
+|---|---|---|---|
+| **No door set** | "None" selected | Disabled, empty | Disabled |
+| **Wall selected (dirty)** | wall chip selected | Enabled; offset auto-fills with centered value the first time the wall changes | Enabled if valid |
+| **Door saved** | wall chip selected | Show persisted values | Disabled (not dirty) |
+| **Field edited after save (dirty)** | unchanged | Edited value | Enabled if valid |
+| **"None" selected with door set** | "None" | Disabled | Enabled — clears the door |
+
+Save behavior: `RoomRepository.updateDoor(...)` → reload surfaces → names in the surfaces list and preview labels update immediately (visible feedback; no toast/snackbar needed). Selecting "None" and saving clears the door; walls revert to coordinate names.
+
+### Validation rules (inline, both platforms)
+
+- `doorWidth`: 400 … wall width (mm). Error caption below the field when out of range: "Door width must be 400–{wallWidth} mm"
+- `doorHeight`: 1500 … wall height. Error: "Door height must be 1500–{wallHeight} mm"
+- `doorOffset`: empty = auto-center (treated as valid); otherwise clamped to `0 … wallWidth − doorWidth`
+- Save disabled while any error is shown
+
+### Preview & layout door indicators
+
+- **3D preview**: the canvases receive the door quads from the shared layer — `RoomEditorViewModel` exposes `doorWorldRects: StateFlow<Map<String, List<Triple<Double,Double,Double>>>>` (surfaceId → world corners, from `DoorGeometry.worldCorners`). The canvases project them with the same `fitViewport` as the walls and draw the dark opening after the wall fills.
+- **2D layout tab**: after drawing tiles, draw a dashed outline rectangle where the door is (the gap tiles already leave it visually open); the outline makes the door explicit. Dashed stroke, gray, 1.5px.
 
 ## Error Handling
 

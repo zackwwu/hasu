@@ -1784,7 +1784,7 @@ World corners reuse the wall's rotation rules: the door offset runs along the wa
 
 - [ ] **Step 2: Draw door opening on both canvases**
 
-After the wall loop in Android `drawIsometricRoom` and iOS `IsometricCanvas.drawIsometricRoom`: if the surface is the door wall, project the door's world corners, fill a dark opening rect (`0xFF3A3A3A` / dark gray), stroke it lighter. Draw the opening after the wall fill so it reads as a cutout.
+`RoomEditorViewModel` exposes `doorWorldRects: StateFlow<Map<String, List<Triple<Double, Double, Double>>>>` (surfaceId → world corners, from `DoorGeometry.worldCorners`). The canvases take it as a parameter, project the door quads with the same `fitViewport` as the walls, and draw after the wall fills: dark opening fill (`0xFF3A3A3A` / dark gray) + lighter outline, so it reads as a cutout.
 
 - [ ] **Step 3: Commit**
 
@@ -1812,7 +1812,7 @@ All three algorithms (grid, brick, herringbone): after computing a tile's rect, 
 
 - [ ] **Step 2: Wire into computeLayout**
 
-`RoomEditorViewModel.computeLayout()`: load the room (`roomRepo.getById(surface.roomId)`), compute the door's surface-local rect via `DoorGeometry.surfaceLocalRect(room, surface)`, pass it as the exclusion.
+`RoomEditorViewModel.computeLayout()`: load the room (`roomRepo.getById(surface.roomId)`), compute the door's surface-local rect via `DoorGeometry.surfaceLocalRect(room, surface)`, pass it as the exclusion. Also draw a dashed gray outline rectangle for the door rect in the 2D layout canvases (after the tiles) on both platforms.
 
 - [ ] **Step 3: Commit**
 
@@ -1822,17 +1822,15 @@ git commit -m "feat: layout engine skips door area with cut edges"
 
 ### Task 25: Door configuration UI (both platforms)
 
+Full UI spec (mockups, states, validation): `docs/superpowers/specs/2026-08-18-door-wall-feature-design.md` → "UI — Door Configuration".
+
 - [ ] **Step 1: Android — Door section in SurfacesListView**
 
-Below the room dimensions text / above the surface list: a "Door" card with:
-- Wall picker: FilterChips — None / Front Wall / Back Wall / Left Wall / Right Wall (coordinate names)
-- Width + Height fields (defaults 900 / 2100 mm)
-- Offset field (auto-centers on wall selection; editable)
-- Save via `RoomRepository.updateDoor()`, then reload surfaces so names refresh
+Per the spec's Android mockup: "Door" `OutlinedCard` below the room-dimensions row — wall picker as `FlowRow` of 5 `FilterChip`s (None / Front / Back / Left / Right, coordinate names + position caption), Width/Height/Offset `OutlinedTextField`s (number keyboard, mm), full-width "Save Door" button enabled only when dirty & valid. Offset auto-fills with the centered value on wall change. Inline validation captions per the spec's validation rules. Save → `RoomRepository.updateDoor()` → reload surfaces.
 
 - [ ] **Step 2: iOS — Door section in SurfacesListView**
 
-Same section as a SwiftUI `Section("Door")` in the surfaces list: Picker (None/Front/Back/Left/Right), dimension fields, offset field; persists via `RoomRepository`.
+Per the spec's iOS mockup: `Section("Door")` in the surfaces `List` — menu-style `Picker` (5 options), Width/Height/Offset `TextField`s (`.numberPad`), `.borderedProminent` Save button, same dirty/valid gating and validation captions. Save → `RoomRepository.updateDoor()` → reload surfaces.
 
 - [ ] **Step 3: Commit**
 
