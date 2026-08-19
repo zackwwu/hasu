@@ -17,6 +17,10 @@ final class IOSRoomEditorViewModel: ObservableObject {
     @Published var currentTiles: [PlacedTile] = []
     @Published var cutEntries: [CutEntry] = []
     @Published var isDragging = false
+    /// surfaceId → door world-space corners (x, y up, z), for the 3D preview.
+    @Published var doorWorldRects: [String: [SIMD3<Double>]] = [:]
+    /// surfaceId → door surface-local rect, for the 2D layout tab.
+    @Published var doorLocalRects: [String: RegionRect] = [:]
 
     private let db: TileLayoutDb = DatabaseProvider.shared.createTileLayoutDb()
 
@@ -217,5 +221,13 @@ final class IOSRoomEditorViewModel: ObservableObject {
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
         cutEntries = sharedVM.cutEntries.value as? [CutEntry] ?? []
         hasUndoBuffer = sharedVM.undoBuffer.value != nil
+        doorLocalRects = sharedVM.doorLocalRects.value as? [String: RegionRect] ?? [:]
+        if let worldMap = sharedVM.doorWorldRects.value as? [String: [WorldPoint]] {
+            doorWorldRects = worldMap.mapValues { list in
+                list.map { SIMD3($0.x, $0.y, $0.z) }
+            }
+        } else {
+            doorWorldRects = [:]
+        }
     }
 }

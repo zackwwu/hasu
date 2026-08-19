@@ -81,7 +81,7 @@ object IsometricProjection {
         return world.map { (x, y, z) -> project(x, y, z, viewAngle, originX, originY) }
     }
 
-    private fun normalizeRotation(rotation: Double): Int =
+    internal fun normalizeRotation(rotation: Double): Int =
         ((rotation.toInt() % 360) + 360) % 360
 
     /**

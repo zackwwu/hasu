@@ -95,7 +95,8 @@ struct LayoutTabView: View {
                         size: size,
                         tiles: vm.currentTiles,
                         groutColor: .gray,
-                        groutWidth: 3
+                        groutWidth: 3,
+                        doorRect: vm.selectedSurfaceId.flatMap { vm.doorLocalRects[$0] }
                     )
                 }
                 .gesture(

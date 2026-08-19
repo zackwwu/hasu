@@ -9,7 +9,8 @@ struct SurfaceCanvas {
         size: CGSize,
         tiles: [PlacedTile],
         groutColor: Color,
-        groutWidth: Double
+        groutWidth: Double,
+        doorRect: RegionRect? = nil
     ) {
         guard !tiles.isEmpty else { return }
 
@@ -55,6 +56,21 @@ struct SurfaceCanvas {
                     .foregroundColor(.white)
                 context.draw(text, at: center)
             }
+        }
+
+        // Dashed door outline drawn after the tiles so the door area reads as explicit
+        if let doorRect = doorRect {
+            let door = CGRect(
+                x: offsetX + doorRect.x * scale,
+                y: offsetY + doorRect.y * scale,
+                width: doorRect.width * scale,
+                height: doorRect.height * scale
+            )
+            context.stroke(
+                Path(door),
+                with: .color(.gray),
+                style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+            )
         }
     }
 

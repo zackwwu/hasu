@@ -11,6 +11,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.sp
 import com.hasu.tilelayout.engine.IsometricProjection
+import com.hasu.tilelayout.engine.WorldPoint
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 
@@ -35,6 +36,7 @@ fun DrawScope.drawIsometricRoom(
     selectedSurfaceId: String?,
     zoom: Double = 1.0,
     textMeasurer: TextMeasurer? = null,
+    doorWorldRects: Map<String, List<WorldPoint>> = emptyMap(),
 ) {
     val fit = IsometricProjection.fitViewport(
         surfaces, viewAngle, size.width.toDouble(), size.height.toDouble(),
@@ -91,6 +93,23 @@ fun DrawScope.drawIsometricRoom(
             if (isSelected) Color(0xFF0091EA) else Color(0xFF9E9386),
             style = Stroke(width = if (isSelected) 2.5f else 1.2f),
         )
+
+        // Door opening: dark cutout drawn after the wall fill, before the label
+        doorWorldRects[surface.id]?.let { doorCorners ->
+            val doorPath = Path().apply {
+                doorCorners.forEachIndexed { i, corner ->
+                    val sp = IsometricProjection.project(
+                        corner.x * scale, corner.y * scale, corner.z * scale,
+                        viewAngle, fit.originX, fit.originY,
+                    )
+                    if (i == 0) moveTo(sp.x.toFloat(), sp.y.toFloat())
+                    else lineTo(sp.x.toFloat(), sp.y.toFloat())
+                }
+                close()
+            }
+            drawPath(doorPath, Color(0xFF3A3A3A), style = Fill)
+            drawPath(doorPath, Color(0xFF6E6658), style = Stroke(width = 1.2f))
+        }
 
         // Surface name label at the polygon centroid
         textMeasurer?.let { measurer ->

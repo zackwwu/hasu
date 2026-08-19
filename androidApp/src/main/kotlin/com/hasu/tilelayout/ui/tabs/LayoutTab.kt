@@ -44,6 +44,7 @@ fun LayoutTab(vm: RoomEditorViewModel) {
     val lockedIds by vm.lockedSurfaceIds.collectAsState()
     val currentTiles by vm.currentTiles.collectAsState()
     val undoBuffer by vm.undoBuffer.collectAsState()
+    val doorLocalRects by vm.doorLocalRects.collectAsState()
     val scope = rememberCoroutineScope()
 
     // Get selected surface for grout info
@@ -109,7 +110,13 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                         )
                     }
             ) {
-                drawTiles(currentTiles, groutColor, groutWidth, scale)
+                drawTiles(
+                    tiles = currentTiles,
+                    groutColor = groutColor,
+                    groutWidth = groutWidth,
+                    scale = scale,
+                    doorRect = doorLocalRects[selectedId],
+                )
             }
         }
 

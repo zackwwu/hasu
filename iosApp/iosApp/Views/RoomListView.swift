@@ -147,7 +147,11 @@ private struct AddRoomSheet: View {
                                     ? "Room" : name.trimmingCharacters(in: .whitespacesAndNewlines),
                                 width: width,
                                 depth: depth,
-                                height: height
+                                height: height,
+                                doorWall: nil,
+                                doorWidth: 900,
+                                doorHeight: 2100,
+                                doorOffset: nil
                             )
                             try? await repo.insert(room: room)
                             onDismiss()
