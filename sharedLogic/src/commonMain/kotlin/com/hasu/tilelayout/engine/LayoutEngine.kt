@@ -5,6 +5,7 @@ import kotlin.math.*
 
 object LayoutEngine {
     private const val MIN_CUT_RATIO = 0.30
+    private const val EDGE_EPS = 0.01
 
     fun compute(
         region: RegionRect,
@@ -13,17 +14,61 @@ object LayoutEngine {
         pattern: TilePattern,
         offsetX: Double,
         offsetY: Double,
+        exclusions: List<RegionRect> = emptyList(),
     ): List<PlacedTile> = when (pattern) {
         TilePattern.GRID, TilePattern.STACKED ->
-            computeGrid(region, tileGroup, groutWidth, offsetX, offsetY)
+            computeGrid(region, tileGroup, groutWidth, offsetX, offsetY, exclusions)
         TilePattern.BRICK ->
-            computeBrick(region, tileGroup, groutWidth, offsetX, offsetY)
+            computeBrick(region, tileGroup, groutWidth, offsetX, offsetY, exclusions)
         TilePattern.HERRINGBONE ->
-            computeHerringbone(region, tileGroup, groutWidth, offsetX, offsetY)
+            computeHerringbone(region, tileGroup, groutWidth, offsetX, offsetY, exclusions)
+    }
+
+    /**
+     * Emit a tile unless it intersects an exclusion (door) area — dropped
+     * entirely, nothing tiles behind the door. Tiles whose edge coincides
+     * with an exclusion boundary get the matching cut-edge flag merged with
+     * their region-boundary flags, so door-adjacent tiles show up in the
+     * cut list. All coordinates are region-local.
+     */
+    private fun placeTile(
+        region: RegionRect,
+        tg: TileGroup,
+        x: Double,
+        y: Double,
+        w: Double,
+        h: Double,
+        rotation: Double,
+        boundaryEdges: List<CutEdge>,
+        exclusions: List<RegionRect>,
+    ): PlacedTile? {
+        val rect = RegionRect(x, y, w, h)
+        if (exclusions.any { it.overlaps(rect) }) return null
+
+        val exclusionEdges = buildList {
+            for (e in exclusions) {
+                val sharesVertical = y < e.y + e.height && y + h > e.y
+                val sharesHorizontal = x < e.x + e.width && x + w > e.x
+                if (sharesVertical && abs(x - (e.x + e.width)) <= EDGE_EPS) add(CutEdge.LEFT)
+                if (sharesVertical && abs(x + w - e.x) <= EDGE_EPS) add(CutEdge.RIGHT)
+                if (sharesHorizontal && abs(y - (e.y + e.height)) <= EDGE_EPS) add(CutEdge.TOP)
+                if (sharesHorizontal && abs(y + h - e.y) <= EDGE_EPS) add(CutEdge.BOTTOM)
+            }
+        }.distinct()
+
+        val edges = boundaryEdges + exclusionEdges.filterNot { it in boundaryEdges }
+        return PlacedTile(
+            region.x + x, region.y + y, w, h,
+            rotation = rotation,
+            isCut = edges.isNotEmpty(),
+            cutEdges = edges,
+            tileGroupId = tg.id,
+        )
     }
 
     private fun computeGrid(
         region: RegionRect, tg: TileGroup, groutW: Double, offX: Double, offY: Double,
+        exclusions: List<RegionRect>,
     ): List<PlacedTile> {
         val unitW = tg.tileWidth + groutW
         val unitH = tg.tileHeight + groutW
@@ -54,13 +99,14 @@ object LayoutEngine {
                 if (cw <= 0 || ch <= 0) continue
                 val isCut = abs(cw - tg.tileWidth) > 0.01 || abs(ch - tg.tileHeight) > 0.01
                 val edges = if (isCut) cutEdges(cx, cy, cw, ch, region.width, region.height) else emptyList()
-                add(PlacedTile(region.x + cx, region.y + cy, cw, ch, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
+                placeTile(region, tg, cx, cy, cw, ch, 0.0, edges, exclusions)?.let { add(it) }
             }
         }
     }
 
     private fun computeBrick(
         region: RegionRect, tg: TileGroup, groutW: Double, offX: Double, offY: Double,
+        exclusions: List<RegionRect>,
     ): List<PlacedTile> {
         val unitW = tg.tileWidth + groutW
         val unitH = tg.tileHeight + groutW
@@ -96,7 +142,7 @@ object LayoutEngine {
                     if (cw <= 0 || ch <= 0) continue
                     val isCut = abs(cw - tg.tileWidth) > 0.01 || abs(ch - tg.tileHeight) > 0.01
                     val edges = if (isCut) cutEdges(cx, cy, cw, ch, region.width, region.height) else emptyList()
-                    add(PlacedTile(region.x + cx, region.y + cy, cw, ch, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
+                    placeTile(region, tg, cx, cy, cw, ch, 0.0, edges, exclusions)?.let { add(it) }
                 }
             }
         }
@@ -104,6 +150,7 @@ object LayoutEngine {
 
     private fun computeHerringbone(
         region: RegionRect, tg: TileGroup, groutW: Double, offX: Double, offY: Double,
+        exclusions: List<RegionRect>,
     ): List<PlacedTile> {
         val cos45 = cos(PI / 4); val sin45 = sin(PI / 4)
         val diagW = tg.tileWidth * cos45 + tg.tileHeight * sin45
@@ -127,7 +174,7 @@ object LayoutEngine {
                 if (cw <= 0 || ch <= 0) continue
                 val isCut = abs(cw - diagW) > 0.01 || abs(ch - diagH) > 0.01
                 val edges = if (isCut) herringboneCutEdges(bx, by, diagW, diagH, region.width, region.height) else emptyList()
-                add(PlacedTile(region.x + cx, region.y + cy, cw, ch, rotation = rot, isCut = isCut, cutEdges = edges, tileGroupId = tg.id))
+                placeTile(region, tg, cx, cy, cw, ch, rot, edges, exclusions)?.let { add(it) }
             }
         }
     }

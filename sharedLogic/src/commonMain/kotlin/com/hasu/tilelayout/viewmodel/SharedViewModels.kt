@@ -342,6 +342,8 @@ class RoomEditorViewModel(
     suspend fun computeLayout(surfaceId: String) {
         val surface = surfaceRepo.getById(surfaceId) ?: return
         val stgs = surfaceRepo.getSTGsBySurface(surfaceId)
+        val room = roomRepo.getById(surface.roomId)
+        val doorRect = room?.let { DoorGeometry.surfaceLocalRect(it, surface) }
 
         val tiles = withContext(Dispatchers.Default) {
             stgs.flatMap { stg ->
@@ -353,6 +355,9 @@ class RoomEditorViewModel(
                     pattern = stg.pattern,
                     offsetX = stg.offsetX,
                     offsetY = stg.offsetY,
+                    exclusions = listOfNotNull(
+                        doorRect?.let { exclusionForRegion(it, stg.region) }
+                    ),
                 )
             }
         }
@@ -364,6 +369,22 @@ class RoomEditorViewModel(
             _currentTiles.value = tiles
         }
         recomputeCutEntries()
+    }
+
+    /**
+     * Translate a surface-local door rect into an STG-region-local exclusion,
+     * or null when the door does not touch this region (e.g. sub-regions that
+     * don't cover the door wall's door area).
+     */
+    private fun exclusionForRegion(doorRect: RegionRect, region: RegionRect): RegionRect? {
+        val local = RegionRect(
+            x = doorRect.x - region.x,
+            y = doorRect.y - region.y,
+            width = doorRect.width,
+            height = doorRect.height,
+        )
+        val regionLocal = RegionRect(0.0, 0.0, region.width, region.height)
+        return if (local.overlaps(regionLocal)) local else null
     }
 
     private suspend fun loadLayoutForSurface(surfaceId: String) {

@@ -407,4 +407,102 @@ class LayoutEngineTest {
         val brickPositions = brickTiles.map { "${it.x.toInt()},${it.y.toInt()}" }.toSet()
         assertNotEquals(gridPositions, brickPositions, "Brick should have different positions than grid")
     }
+
+    // --- DOOR EXCLUSIONS ---
+
+    private fun overlapsExclusion(tile: PlacedTile, exclusion: RegionRect): Boolean =
+        RegionRect(tile.x, tile.y, tile.width, tile.height).overlaps(exclusion)
+
+    @Test
+    fun emptyExclusionsMatchLegacyBehavior() {
+        // have: same region, same params
+        val region = RegionRect(0.0, 0.0, 903.0, 603.0)
+
+        // when: compute with explicit empty exclusions vs omitted
+        val explicit = LayoutEngine.compute(region, tileGroup, groutWidth, TilePattern.GRID, 0.0, 0.0, emptyList())
+        val omitted = LayoutEngine.compute(region, tileGroup, groutWidth, TilePattern.GRID, 0.0, 0.0)
+
+        // want: identical results
+        assertEquals(omitted, explicit)
+    }
+
+    @Test
+    fun gridExclusionDropsTilesAndFlagsAdjacent() {
+        // have: zero grout, region exactly 4×4 tiles (300×200); door 600×400 at x=300
+        //   → tiles in cols 1-2 × rows 0-1 dropped; col-0 tiles get RIGHT,
+        //     col-3 tiles get LEFT, row-2 tiles under the door get TOP
+        val region = RegionRect(0.0, 0.0, 1200.0, 800.0)
+        val exclusion = RegionRect(300.0, 0.0, 600.0, 400.0)
+
+        // when: compute grid with the door exclusion
+        val tiles = LayoutEngine.compute(region, tileGroup, 0.0, TilePattern.GRID, 0.0, 0.0, listOf(exclusion))
+
+        // want: 4 dropped, no tile inside the door, exact adjacency flags
+        assertEquals(12, tiles.size, "16 baseline − 4 dropped = 12")
+        assertTrue(tiles.none { overlapsExclusion(it, exclusion) }, "No tile may intersect the door area")
+        assertEquals(2, tiles.count { CutEdge.RIGHT in it.cutEdges && it.x + it.width == 300.0 })
+        assertEquals(2, tiles.count { CutEdge.LEFT in it.cutEdges && it.x == 900.0 })
+        assertEquals(2, tiles.count { CutEdge.TOP in it.cutEdges && it.y == 400.0 })
+        // door-adjacent FULL-size tiles are flagged as cuts so the cut list sees them
+        val fullAdjacent = tiles.filter {
+            CutEdge.TOP in it.cutEdges && abs(it.width - 300.0) < 0.01 && abs(it.height - 200.0) < 0.01
+        }
+        assertEquals(2, fullAdjacent.size, "Full-size tiles under the door carry TOP flags")
+        assertTrue(fullAdjacent.all { it.isCut }, "Door-adjacent full tiles must be marked isCut")
+    }
+
+    @Test
+    fun brickExclusionDropsTilesAndFlagsAdjacent() {
+        // have: zero grout, 1200×800 region; door 600×400 at x=300
+        val region = RegionRect(0.0, 0.0, 1200.0, 800.0)
+        val exclusion = RegionRect(300.0, 0.0, 600.0, 400.0)
+
+        // when: compute brick with the door exclusion
+        val tiles = LayoutEngine.compute(region, tileGroup, 0.0, TilePattern.BRICK, 0.0, 0.0, listOf(exclusion))
+
+        // want: 6 dropped (3 per row in rows 0-1), none inside the door,
+        //       row-2 tiles whose top edge aligns with the door bottom get TOP flags
+        assertEquals(10, tiles.size, "16 baseline − 6 dropped = 10")
+        assertTrue(tiles.none { overlapsExclusion(it, exclusion) }, "No tile may intersect the door area")
+        assertTrue(
+            tiles.any { CutEdge.TOP in it.cutEdges && it.y == 400.0 },
+            "Tiles directly below the door carry TOP cut-edge flags",
+        )
+        val fullAdjacent = tiles.filter {
+            CutEdge.TOP in it.cutEdges && abs(it.width - 300.0) < 0.01 && abs(it.height - 200.0) < 0.01
+        }
+        assertTrue(fullAdjacent.all { it.isCut }, "Door-adjacent full tiles must be marked isCut")
+    }
+
+    @Test
+    fun herringboneExclusionDropsTilesAndFlagsAdjacent() {
+        // have: 200×100 tiles → diagW = 3×stepX, so AABB edges align every 3 columns;
+        //       door = one AABB-width strip starting at the col-0/col-3 seam
+        val tg = TileGroup(id = "tg3", projectId = "p1", name = "Herr200", tileWidth = 200.0, tileHeight = 100.0)
+        val region = RegionRect(0.0, 0.0, 1200.0, 800.0)
+        val cos45 = kotlin.math.cos(kotlin.math.PI / 4)
+        val sin45 = kotlin.math.sin(kotlin.math.PI / 4)
+        val diagW = tg.tileWidth * cos45 + tg.tileHeight * sin45
+        val seam = diagW / 2 // right edge of col-0 AABBs == left edge of col-3 AABBs
+        val exclusion = RegionRect(seam, 0.0, diagW, 400.0)
+
+        // when: compute herringbone with the door exclusion
+        val withExclusion = LayoutEngine.compute(region, tg, 0.0, TilePattern.HERRINGBONE, 0.0, 0.0, listOf(exclusion))
+        val baseline = LayoutEngine.compute(region, tg, 0.0, TilePattern.HERRINGBONE, 0.0, 0.0)
+
+        // want: exactly the intersecting tiles dropped, none left inside the door
+        val expectedSurvivors = baseline.filterNot { overlapsExclusion(it, exclusion) }
+        assertEquals(expectedSurvivors.size, withExclusion.size, "Only door-intersecting tiles are dropped")
+        assertTrue(withExclusion.size < baseline.size, "Exclusion must drop some tiles")
+        assertTrue(withExclusion.none { overlapsExclusion(it, exclusion) }, "No tile may intersect the door area")
+        // want: seam-adjacent tiles carry cut-edge flags
+        assertTrue(
+            withExclusion.any { CutEdge.RIGHT in it.cutEdges && abs((it.x + it.width) - seam) < 0.01 },
+            "Tiles left of the door carry RIGHT cut-edge flags",
+        )
+        assertTrue(
+            withExclusion.any { CutEdge.LEFT in it.cutEdges && abs(it.x - (seam + diagW)) < 0.01 },
+            "Tiles right of the door carry LEFT cut-edge flags",
+        )
+    }
 }
