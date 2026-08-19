@@ -15,8 +15,35 @@ Let the user specify which wall the room's door is on. This unlocks three capabi
 
 - One door per room (MVP)
 - Door defaults: 900 × 2100 mm, horizontally centered on the wall at selection time
-- Wall picker labels use coordinate names ("Front Wall" = z=0 wall) because door-relative names only exist once a door is set
+- The door wall is picked via a **mini top-down room diagram** with tappable edges — both in the room-creation sheet and in the room editor's Door card. No blind Front/Back/Left/Right text picker.
 - The door sits on the floor: in surface-local coordinates the door rect is always `(doorOffset, 0, doorWidth, doorHeight)`
+
+## UX Flow
+
+1. **Create room** — dims + tap the door edge on the mini diagram (defaults to Front = z=0 edge)
+2. **Generate surfaces** — walls arrive already named door-relatively ("Door Wall", "Front Wall", …)
+3. **Fine-tune** — Door card in the Surfaces tab (same diagram) for width / height / offset, or move the door to another wall
+
+Choosing "None" keeps coordinate names (Front = z=0, Back = z=depth, Left = x=0, Right = x=width). Changing the door wall later renames walls immediately — an expected consequence of an explicit action.
+
+## Door Wall Diagram (shared picker)
+
+A top-down rectangle of the room (width × depth), the four edges labeled and tappable:
+
+```
+           Back
+    ┌───────────────┐
+    │               │
+Left│      🚪       │Right   ← tap an edge to put the door there
+    │               │
+    └───────────────┘
+           Front
+```
+
+- **Front** = z=0 edge = the wall seen head-on in the 3D preview's default view (diagram and preview agree)
+- Selected edge highlights (door notch drawn at the tap point); "None" button below clears
+- Edge-hit logic is shared and pure: `DoorPickerGeometry.wallAtTap(x, y, diagramW, diagramH, roomWidth, roomDepth): Double?` returns the tapped wall's rotation (0/90/180/270) or null (inside/outside). Rendered natively on both platforms (SwiftUI shapes + taps / Compose Canvas + taps), both delegating to the shared function.
+- The door wall rotation persists to `Room.doorWall` immediately on tap (no separate Save step for the wall itself in the creation sheet)
 
 ## Naming Convention
 
@@ -106,10 +133,89 @@ After drawing the wall polygons, both canvases draw the door on the door wall:
 
 Both platforms, in the room editor's Surfaces tab:
 
-- **Wall picker**: None / Front Wall / Back Wall / Left Wall / Right Wall (coordinate names)
-- **Width / Height fields**: defaults 900 / 2100 mm
-- **Offset field**: auto-centers when a wall is selected; editable afterwards
-- Saving calls `RoomRepository.updateDoor()`, then reloads surfaces so names refresh everywhere
+Two places:
+
+1. **Room-creation sheet** (iOS `AddRoomSheet` in RoomListView.swift / Android add-room dialog in ProjectDetailScreen.kt): the mini diagram appears under the dimension fields; tapping an edge sets the door wall for the room being created.
+2. **Room editor → Surfaces tab**: a "Door" card (Android) / `Section("Door")` (iOS) between the room-dimensions line and the surface list — the same diagram plus width/height/offset fields. The section is always visible (also when surfaces are generated).
+
+### Android (Compose) — "Door" card
+
+An `OutlinedCard` below the room-dimensions row, above the surfaces area:
+
+```
+┌──────────────────────────────────────────────┐
+│ 🚪 Door                                        │
+│                                                │
+│              ┌───────────┐                     │   ← mini top-down diagram,
+│              │           │                     │     tap edge to pick wall;
+│              │     🚪    │                     │     selected edge highlighted
+│              └───────────┘                     │
+│              (None)                            │   ← TextButton clears the door
+│                                                │
+│ Width (mm)   Height (mm)                       │   ← OutlinedTextFields, number keyboard
+│ [ 900      ] [ 2100     ]                      │
+│                                                │
+│ Offset from wall corner (mm)                   │
+│ [ 1050     ]  caption: "Auto-centered on wall  │   ← shown until user edits offset
+│                selection"                      │
+│                                                │
+│ [ Save Door ]  (enabled when dirty & valid)    │
+└──────────────────────────────────────────────┘
+```
+
+Component notes:
+- **Title icon**: `Text("🚪")` — no new icon dependency (material-icons-core is not in the project)
+- **Diagram**: Compose `Canvas` (~180dp tall, aspect = roomWidth/roomDepth) with labeled edges (Front/Back/Left/Right); `detectTapGestures` → shared `DoorPickerGeometry.wallAtTap` → highlights the selected edge with a door notch; tap sets `doorWall` immediately (UI state), Save persists it
+- **"None"** `TextButton` under the diagram clears the selection
+- **Width/Height/Offset**: `OutlinedTextField`s with `KeyboardType.Number`; values in mm
+- **Save Door**: `Button`, full width, enabled only when the door is dirty AND valid
+
+### iOS (SwiftUI) — "Door" section
+
+A `Section("Door")` inside the surfaces `List`:
+
+```
+DOOR
+  [ mini top-down diagram, tap edge to pick ]   ← Rectangle + 4 edge strips,
+                                                   tap → shared wallAtTap
+  (None)
+  Width       900   mm                          ← TextField (numberPad)
+  Height      2100  mm
+  Offset      1050  mm  (Auto-centered)
+  [ Save Door ]                                 ← disabled when not dirty/invalid
+```
+
+Component notes:
+- **Diagram**: SwiftUI `ZStack` — rectangle outline + 4 tappable edge overlays; taps call the shared `wallAtTap`; selected edge stroked in accent color with a door notch
+- **"None"** button under the diagram clears the selection
+- Fields: `TextField` with `.keyboardType(.numberPad)` inside an `HStack` label + value
+- Save button styled `.borderedProminent`, disabled unless dirty & valid
+
+### Interaction states
+
+| State | Diagram | Fields | Save button |
+|---|---|---|---|
+| **No door set** | No edge selected | Disabled, empty | Disabled |
+| **Edge tapped (dirty)** | Edge highlighted | Enabled; offset auto-fills with centered value the first time the wall changes | Enabled if valid |
+| **Door saved** | Edge highlighted | Show persisted values | Disabled (not dirty) |
+| **Field edited after save (dirty)** | unchanged | Edited value | Enabled if valid |
+| **"None" with door set** | No edge selected | Disabled | Enabled — clears the door |
+
+Save behavior: `RoomRepository.updateDoor(...)` → reload surfaces → names in the surfaces list and preview labels update immediately (visible feedback; no toast/snackbar needed). Selecting "None" and saving clears the door; walls revert to coordinate names.
+
+In the **creation sheet** there is no Save button: the tapped wall is part of the room being created.
+
+### Validation rules (inline, both platforms)
+
+- `doorWidth`: 400 … wall width (mm). Error caption below the field when out of range: "Door width must be 400–{wallWidth} mm"
+- `doorHeight`: 1500 … wall height. Error: "Door height must be 1500–{wallHeight} mm"
+- `doorOffset`: empty = auto-center (treated as valid); otherwise clamped to `0 … wallWidth − doorWidth`
+- Save disabled while any error is shown
+
+### Preview & layout door indicators
+
+- **3D preview**: the canvases receive the door quads from the shared layer — `RoomEditorViewModel` exposes `doorWorldRects: StateFlow<Map<String, List<Triple<Double,Double,Double>>>>` (surfaceId → world corners, from `DoorGeometry.worldCorners`). The canvases project them with the same `fitViewport` as the walls and draw the dark opening after the wall fills.
+- **2D layout tab**: after drawing tiles, draw a dashed outline rectangle where the door is (the gap tiles already leave it visually open); the outline makes the door explicit. Dashed stroke, gray, 1.5px.
 
 ## Error Handling
 
@@ -123,6 +229,7 @@ Both platforms, in the room editor's Surfaces tab:
 
 - `SurfaceDisplayNameTest`: door-relative names for all 4 door rotations; no-door fallback; full-turn normalization
 - `DoorGeometryTest`: surface-local rect per wall rotation; centering when offset is null; null when surface is not the door wall
+- `DoorPickerGeometryTest`: `wallAtTap` returns the correct rotation for taps near each of the 4 edges (including non-square rooms); null for taps inside the diagram or on the padding margin
 - `LayoutEngineTest`: all 3 patterns drop tiles inside the exclusion; door-adjacent tiles carry cut edges
 
 ### E2E
