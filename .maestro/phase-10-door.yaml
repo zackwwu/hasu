@@ -1,0 +1,73 @@
+# Maestro flow: Phase 10 — Door Wall Feature Verification
+#
+# Create a room with the door on the Front wall (diagram default) →
+# generate surfaces → door-relative wall names → Layout door gap →
+# Preview door opening.
+#
+# iOS:      maestro test .maestro/phase-10-door.yaml -p ios -e APP_ID=zackwwu.hasu.TileLayout
+# Android:  maestro test .maestro/phase-10-door.yaml -p android -e APP_ID=com.hasu.tilelayout
+
+appId: ${APP_ID}
+---
+- launchApp:
+    clearState: false
+
+# ── Open existing project ──
+- assertVisible: "Projects"
+- tapOn: "Maestro Test"
+- tapOn: "Bathroom"
+
+# ── Add a room; tap the door diagram (door defaults to Front = z=0) ──
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn:
+          id: "add-room"
+      - tapOn:
+          id: "room-name-field"
+      - inputText: "Door Room"
+      - tapOn:
+          id: "door-diagram"   # taps diagram center; door stays on the default Front edge
+      - tapOn: "Add"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn:
+          id: "add-room"
+      - tapOn:
+          id: "room-name-field"
+      - inputText: "Door Room"
+      - tapOn:
+          id: "door-diagram"   # taps diagram center; door stays on the default Front edge
+      - tapOn: "Add"
+
+- tapOn: "Door Room"
+
+# ── Generate surfaces ──
+- runFlow:
+    when:
+      platform: Android
+    commands:
+      - tapOn: "Generate Surfaces"
+      - tapOn: "Generate"
+- runFlow:
+    when:
+      platform: iOS
+    commands:
+      - tapOn: "Generate Surfaces"
+
+# ── Door-relative wall names in the surfaces list ──
+- assertVisible: "Door Wall 3000×2400"
+- assertVisible: "Front Wall 3000×2400"
+- takeScreenshot: phase10-01-door-names
+
+# ── Layout tab: door gap + dashed outline on the door wall ──
+- tapOn: "Layout"
+- tapOn: "Door Wall 3000×2400"
+- takeScreenshot: phase10-02-layout-door-gap
+
+# ── Preview tab: door opening in the 3D view ──
+- tapOn: "Preview"
+- takeScreenshot: phase10-03-preview-door-opening

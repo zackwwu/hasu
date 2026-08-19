@@ -29,7 +29,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.ui.canvas.drawTiles
 import com.hasu.tilelayout.ui.export.ExportDialog
 import com.hasu.tilelayout.ui.export.ExportHelper
@@ -66,8 +65,10 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                     selected = surface.id == selectedId,
                     onClick = { scope.launch { vm.selectSurface(surface.id) } },
                     label = {
-                        val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
-                        Text("$typeName ${surface.width.toInt()}×${surface.height.toInt()}", fontSize = 11.sp)
+                        Text(
+                            "${surface.displayName()} ${surface.width.toInt()}×${surface.height.toInt()}",
+                            fontSize = 11.sp,
+                        )
                     }
                 )
             }
@@ -132,8 +133,10 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                         selected = surface.id in lockedIds,
                         onClick = { vm.toggleLock(surface.id) },
                         label = {
-                            val typeName = if (surface.type == SurfaceType.WALL) "Wall" else "Floor"
-                            Text("$typeName ${surface.width.toInt()}×${surface.height.toInt()}", fontSize = 10.sp)
+                            Text(
+                                "${surface.displayName()} ${surface.width.toInt()}×${surface.height.toInt()}",
+                                fontSize = 10.sp,
+                            )
                         }
                     )
                 }
