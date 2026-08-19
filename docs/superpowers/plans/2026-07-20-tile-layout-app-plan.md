@@ -1762,7 +1762,7 @@ git commit -m "feat: door-relative wall names"
 
 ### Task 23: Door geometry + 3D preview rendering
 
-- [ ] **Step 1: Shared DoorGeometry helper**
+- [ ] **Step 1: Shared DoorGeometry + DoorPickerGeometry helpers**
 
 ```kotlin
 // engine/DoorGeometry.kt
@@ -1780,7 +1780,16 @@ object DoorGeometry {
 }
 ```
 
-World corners reuse the wall's rotation rules: the door offset runs along the wall's span direction from the anchor corner.
+```kotlin
+// engine/DoorPickerGeometry.kt — edge-hit logic for the mini top-down diagram
+object DoorPickerGeometry {
+    /** Which wall edge a tap hits in a top-down diagram (rotation 0/90/180/270), or null. */
+    fun wallAtTap(x: Double, y: Double, diagramW: Double, diagramH: Double,
+                  roomWidth: Double, roomDepth: Double): Double?
+}
+```
+
+World corners reuse the wall's rotation rules: the door offset runs along the wall's span direction from the anchor corner. `wallAtTap` maps a tap near an edge (within a fixed margin, e.g. 24dp scaled by the diagram size) to the wall rotation: Front edge = z=0 → 0, Back = 180, Left = 90, Right = 270.
 
 - [ ] **Step 2: Draw door opening on both canvases**
 
@@ -1824,18 +1833,22 @@ git commit -m "feat: layout engine skips door area with cut edges"
 
 Full UI spec (mockups, states, validation): `docs/superpowers/specs/2026-08-18-door-wall-feature-design.md` → "UI — Door Configuration".
 
-- [ ] **Step 1: Android — Door section in SurfacesListView**
+- [ ] **Step 1: Android — mini diagram in the add-room dialog + "Door" card in SurfacesListView**
 
-Per the spec's Android mockup: "Door" `OutlinedCard` below the room-dimensions row — wall picker as `FlowRow` of 5 `FilterChip`s (None / Front / Back / Left / Right, coordinate names + position caption), Width/Height/Offset `OutlinedTextField`s (number keyboard, mm), full-width "Save Door" button enabled only when dirty & valid. Offset auto-fills with the centered value on wall change. Inline validation captions per the spec's validation rules. Save → `RoomRepository.updateDoor()` → reload surfaces.
+Per the spec mockups:
+- **Add-room dialog** (ProjectDetailScreen.kt): under the dimension fields, a top-down mini diagram (~180dp, aspect = width/depth, labeled edges); tap → shared `DoorPickerGeometry.wallAtTap` → sets the door wall for the new room (no save button; part of creation). Door defaults to Front (z=0) unless the user taps elsewhere or "None".
+- **"Door" card** in SurfacesListView: same diagram (tap to change wall, "None" `TextButton` below), Width/Height/Offset `OutlinedTextField`s (number keyboard, mm), full-width "Save Door" enabled only when dirty & valid. Offset auto-fills with the centered value on wall change. Inline validation captions per the spec. Save → `RoomRepository.updateDoor()` → reload surfaces.
 
-- [ ] **Step 2: iOS — Door section in SurfacesListView**
+- [ ] **Step 2: iOS — mini diagram in AddRoomSheet + Door section in SurfacesListView**
 
-Per the spec's iOS mockup: `Section("Door")` in the surfaces `List` — menu-style `Picker` (5 options), Width/Height/Offset `TextField`s (`.numberPad`), `.borderedProminent` Save button, same dirty/valid gating and validation captions. Save → `RoomRepository.updateDoor()` → reload surfaces.
+Per the spec mockups:
+- **AddRoomSheet** (RoomListView.swift): `ZStack` diagram (rectangle + 4 tappable edge overlays) under the dimension fields; taps call the shared `wallAtTap`; door part of room creation, default Front.
+- **`Section("Door")`** in the surfaces `List`: same diagram picker + "None" button, Width/Height/Offset `TextField`s (`.numberPad`), `.borderedProminent` Save button, same dirty/valid gating and validation captions. Save → `RoomRepository.updateDoor()` → reload surfaces.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git commit -m "feat: door configuration UI on both platforms"
+git commit -m "feat: door configuration UI with diagram picker on both platforms"
 ```
 
 ### Task 26: Door feature verification
@@ -1848,7 +1861,7 @@ git commit -m "feat: door configuration UI on both platforms"
 
 - [ ] **Step 2: Maestro + checklist**
 
-Extend `.maestro/phase-9-pipeline.yaml` (or a new `phase-10-door.yaml`): open room → set door on Front Wall → verify surfaces list shows "Door Wall" and "Front Wall" renamed → Layout tab shows gap where the door is → Preview shows the door opening. Update `docs/phase-9-verification-checklist.md`.
+New `phase-10-door.yaml`: create room with dims → tap the Front edge of the diagram → save → generate surfaces → verify surfaces list shows "Door Wall" and "Front Wall" renamed → Layout tab shows the door gap + dashed outline → Preview shows the door opening. Update `docs/phase-9-verification-checklist.md`.
 
 - [ ] **Step 3: Commit**
 
