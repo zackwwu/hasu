@@ -136,7 +136,9 @@ deleteRoom:
 DELETE FROM rooms WHERE id = ?;
 
 getSurfacesByRoom:
-SELECT * FROM surfaces WHERE room_id = ?;
+SELECT s.*, r.door_wall FROM surfaces s
+JOIN rooms r ON r.id = s.room_id
+WHERE s.room_id = ?;
 
 getSurfaceById:
 SELECT * FROM surfaces WHERE id = ?;

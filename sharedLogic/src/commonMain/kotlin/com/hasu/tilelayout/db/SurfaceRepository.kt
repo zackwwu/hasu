@@ -101,14 +101,10 @@ class SqlDelightSurfaceRepository(private val queries: TileLayoutDbQueries) : Su
     }
 }
 
-internal fun Surfaces.toSurface(): Surface = Surface(
+internal fun GetSurfacesByRoom.toSurface(): Surface = Surface(
     id = id,
     roomId = room_id,
-    type = try {
-        SurfaceType.valueOf(type)
-    } catch (_: IllegalArgumentException) {
-        SurfaceType.WALL
-    },
+    type = parseSurfaceType(type),
     width = width,
     height = height,
     position = SurfacePosition(
@@ -117,13 +113,38 @@ internal fun Surfaces.toSurface(): Surface = Surface(
         z = pos_z,
         rotation = pos_rotation,
     ),
-    groutColor = try {
-        GroutColor.valueOf(grout_color)
-    } catch (_: IllegalArgumentException) {
-        GroutColor.GREY
-    },
+    groutColor = parseGroutColor(grout_color),
+    groutWidth = grout_width,
+    doorRotation = door_wall?.toDoubleOrNull(),
+)
+
+internal fun Surfaces.toSurface(): Surface = Surface(
+    id = id,
+    roomId = room_id,
+    type = parseSurfaceType(type),
+    width = width,
+    height = height,
+    position = SurfacePosition(
+        x = pos_x,
+        y = pos_y,
+        z = pos_z,
+        rotation = pos_rotation,
+    ),
+    groutColor = parseGroutColor(grout_color),
     groutWidth = grout_width,
 )
+
+private fun parseSurfaceType(raw: String): SurfaceType = try {
+    SurfaceType.valueOf(raw)
+} catch (_: IllegalArgumentException) {
+    SurfaceType.WALL
+}
+
+private fun parseGroutColor(raw: String): GroutColor = try {
+    GroutColor.valueOf(raw)
+} catch (_: IllegalArgumentException) {
+    GroutColor.GREY
+}
 
 internal fun Surface_tile_groups.toSurfaceTileGroup(): SurfaceTileGroup = SurfaceTileGroup(
     id = id,
