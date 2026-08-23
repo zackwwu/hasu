@@ -1831,15 +1831,6 @@ git commit -m "feat: layout engine skips door area with cut edges"
 
 ### Task 25: Door configuration UI (both platforms)
 
-<<<<<<< HEAD
-- [ ] **Step 1: Android — Door section in SurfacesListView**
-
-Below the room dimensions text / above the surface list: a "Door" card with:
-- Wall picker: FilterChips — None / Front Wall / Back Wall / Left Wall / Right Wall (coordinate names)
-- Width + Height fields (defaults 900 / 2100 mm)
-- Offset field (auto-centers on wall selection; editable)
-- Save via `RoomRepository.updateDoor()`, then reload surfaces so names refresh
-=======
 Full UI spec (mockups, states, validation): `docs/superpowers/specs/2026-08-18-door-wall-feature-design.md` → "UI — Door Configuration".
 
 - [ ] **Step 1: Android — mini diagram in the add-room dialog + "Door" card in SurfacesListView**
@@ -1847,17 +1838,12 @@ Full UI spec (mockups, states, validation): `docs/superpowers/specs/2026-08-18-d
 Per the spec mockups:
 - **Add-room dialog** (ProjectDetailScreen.kt): under the dimension fields, a top-down mini diagram (~180dp, aspect = width/depth, labeled edges); tap → shared `DoorPickerGeometry.wallAtTap` → sets the door wall for the new room (no save button; part of creation). Door defaults to Front (z=0) unless the user taps elsewhere or "None".
 - **"Door" card** in SurfacesListView: same diagram (tap to change wall, "None" `TextButton` below), Width/Height/Offset `OutlinedTextField`s (number keyboard, mm), full-width "Save Door" enabled only when dirty & valid. Offset auto-fills with the centered value on wall change. Inline validation captions per the spec. Save → `RoomRepository.updateDoor()` → reload surfaces.
->>>>>>> d7b7491 (docs: diagram-based door wall picker in spec and plan)
 
 - [ ] **Step 2: iOS — mini diagram in AddRoomSheet + Door section in SurfacesListView**
 
-<<<<<<< HEAD
-Same section as a SwiftUI `Section("Door")` in the surfaces list: Picker (None/Front/Back/Left/Right), dimension fields, offset field; persists via `RoomRepository`.
-=======
 Per the spec mockups:
 - **AddRoomSheet** (RoomListView.swift): `ZStack` diagram (rectangle + 4 tappable edge overlays) under the dimension fields; taps call the shared `wallAtTap`; door part of room creation, default Front.
 - **`Section("Door")`** in the surfaces `List`: same diagram picker + "None" button, Width/Height/Offset `TextField`s (`.numberPad`), `.borderedProminent` Save button, same dirty/valid gating and validation captions. Save → `RoomRepository.updateDoor()` → reload surfaces.
->>>>>>> d7b7491 (docs: diagram-based door wall picker in spec and plan)
 
 - [ ] **Step 3: Commit**
 
@@ -1895,10 +1881,173 @@ git commit -m "test: door feature tests + maestro flow"
 - Output texture aspect ratio matches the tile's `tileWidth/tileHeight` ratio (not hardcoded square)
 - Both platforms include a "Review Corners" screen where users can drag corner handles before perspective correction (auto-detection fails on busy backgrounds)
 - Stability threshold: 10 consecutive frames (~330ms at 30fps) where detected corners move < 15pts
+- **Scan guide frame:** a dashed frame at the tile's own aspect ratio is drawn over the live preview so the user can square the tile up before shooting. Tile dimensions are already required at tile-group creation on both platforms (iOS `AddTileGroupSheet` "Tile Size (mm)"; Android `AddTileGroupDialog` `TileDimensionField`), and Phase 11 already threads the whole `TileGroup` into both scanner entry points — so the frame needs no new plumbing.
+- **Best-fit orientation:** the frame uses whichever of `w:h` or `h:w` covers more of the viewport, so a landscape tile still gets a large target on a portrait phone. When it flips, the *corner order* fed to perspective correction is rotated back — no image resampling — so the saved texture always reads as `tileWidth × tileHeight`.
+- **Guide frame doubles as the fallback corner seed:** capture is never blocked by a failed detection. If no rectangle is found, Review Corners opens seeded with the guide frame's four corners and the user drags them into place.
+
+**Known limitation (accepted for MVP):** the guide frame is symmetric, so the app cannot tell clockwise from counter-clockwise framing. A fixed convention is used — the tile's natural top-left is assumed to sit at the frame's top-right — so the opposite placement yields a texture rotated 180°. This is visually irrelevant for the aspect ratio and for most tile textures. A rotate control in Review Corners is explicitly **out of scope**.
 
 ---
 
-### Task 27: Edge Detection — iOS
+### Task 27: Shared scan guide geometry
+
+The guide frame must exist before either platform scanner is written — both the overlay and the corner-seed fallback depend on it. One shared implementation keeps the two platforms from drifting.
+
+- [ ] **Step 1: Write ScanGuideGeometry.kt**
+
+`sharedLogic/src/commonMain/kotlin/com/hasu/tilelayout/engine/ScanGuideGeometry.kt` — same role as the existing `DoorPickerGeometry`: pure geometry backing a UI picker, called from both platforms.
+
+```kotlin
+package com.hasu.tilelayout.engine
+
+import kotlin.math.abs
+import kotlin.math.ln
+
+object ScanGuideGeometry {
+    /**
+     * A centered guide frame in viewport coordinates.
+     * [rotated] is true when the tile is framed 90° from its natural orientation —
+     * the caller must rotate the corner order back before perspective correction.
+     */
+    data class GuideFrame(
+        val x: Double,
+        val y: Double,
+        val width: Double,
+        val height: Double,
+        val rotated: Boolean,
+    )
+
+    /**
+     * Largest centered frame preserving the tile's aspect ratio, inset within the viewport.
+     * Tries both w:h and h:w and keeps whichever covers more area, so a landscape tile
+     * still gets a large target on a portrait screen. Square tiles resolve to rotated = false.
+     *
+     * Pass the preview rect actually available for aiming (i.e. minus any chrome drawn
+     * over it) — this function does not know about safe areas.
+     */
+    fun frame(
+        viewportWidth: Double,
+        viewportHeight: Double,
+        tileWidth: Double,
+        tileHeight: Double,
+        insetFraction: Double = 0.85,
+    ): GuideFrame {
+        require(viewportWidth > 0 && viewportHeight > 0) { "viewport must be positive" }
+        require(tileWidth > 0 && tileHeight > 0) { "tile dimensions must be positive" }
+
+        val natural = fit(viewportWidth, viewportHeight, tileWidth / tileHeight, insetFraction)
+        val swapped = fit(viewportWidth, viewportHeight, tileHeight / tileWidth, insetFraction)
+
+        // Strictly-greater keeps square tiles (equal areas) on the natural orientation.
+        val useSwapped = swapped.first * swapped.second > natural.first * natural.second
+        val (w, h) = if (useSwapped) swapped else natural
+
+        return GuideFrame(
+            x = (viewportWidth - w) / 2,
+            y = (viewportHeight - h) / 2,
+            width = w,
+            height = h,
+            rotated = useSwapped,
+        )
+    }
+
+    /** Width/height of the largest [aspect]-ratio box fitting inside the inset viewport. */
+    private fun fit(vw: Double, vh: Double, aspect: Double, inset: Double): Pair<Double, Double> {
+        val availW = vw * inset
+        val availH = vh * inset
+        return if (availW / availH > aspect) {
+            Pair(availH * aspect, availH)   // height-bound
+        } else {
+            Pair(availW, availW / aspect)   // width-bound
+        }
+    }
+
+    /** Frame corners in tl, tr, br, bl order — matches Android's QuadCorners field order. */
+    fun corners(frame: GuideFrame): List<Pair<Double, Double>> = listOf(
+        Pair(frame.x, frame.y),
+        Pair(frame.x + frame.width, frame.y),
+        Pair(frame.x + frame.width, frame.y + frame.height),
+        Pair(frame.x, frame.y + frame.height),
+    )
+
+    /**
+     * True when a quad was framed 90° from the tile's natural orientation — i.e. its
+     * aspect sits closer to the tile's reciprocal ratio than to its natural one.
+     *
+     * Lets the auto-rotate apply to AUTO-DETECTED quads too, not just the guide-frame
+     * fallback: pass the detected quad's bounding width/height. Square tiles (natural
+     * == reciprocal) resolve to false, matching [frame]'s tie-break.
+     */
+    fun isRotated(
+        quadWidth: Double,
+        quadHeight: Double,
+        tileWidth: Double,
+        tileHeight: Double,
+    ): Boolean {
+        require(quadWidth > 0 && quadHeight > 0) { "quad dimensions must be positive" }
+        require(tileWidth > 0 && tileHeight > 0) { "tile dimensions must be positive" }
+        val quad = ln(quadWidth / quadHeight)
+        val natural = ln(tileWidth / tileHeight)
+        val swapped = ln(tileHeight / tileWidth)
+        // Compared in log space so "2× too wide" and "2× too tall" score equally.
+        return abs(quad - swapped) < abs(quad - natural)
+    }
+
+    /**
+     * Index permutation mapping a tl,tr,br,bl corner list back to the tile's natural
+     * orientation, so the corrected output always reads as tileWidth × tileHeight.
+     * Returns [0,1,2,3] when not rotated.
+     *
+     * Returns an order rather than reordered points so each platform applies it to its
+     * own point type (CGPoint / PointF) without bridging a collection of pairs.
+     *
+     * Assumes the tile's natural top-left corner sits at the frame's top-right. The
+     * opposite placement yields a 180°-rotated texture — see the phase's known limitation.
+     */
+    fun unrotationOrder(rotated: Boolean): List<Int> =
+        if (rotated) listOf(1, 2, 3, 0) else listOf(0, 1, 2, 3)
+}
+```
+
+`corners()` is a Kotlin-side convenience for Android; iOS builds its `CGPoint`s straight from `GuideFrame`'s `Double` fields, so no pair collection ever crosses the bridge.
+
+- [ ] **Step 2: Write ScanGuideGeometryTest.kt**
+
+`sharedLogic/src/commonTest/kotlin/com/hasu/tilelayout/engine/ScanGuideGeometryTest.kt`:
+
+- landscape tile 600×300 in portrait viewport 400×800 → `rotated = true`, frame taller than wide (expect 340×680)
+- portrait tile 300×600 in portrait viewport 400×800 → `rotated = false` (expect 340×680)
+- landscape tile 600×300 in landscape viewport 800×400 → `rotated = false` (expect 680×340), exercising the height-bound branch
+- square tile 300×300 → `rotated = false` (tie-break), frame is square
+- frame always centered: `x * 2 + width == viewportWidth` and `y * 2 + height == viewportHeight`, within 0.01
+- frame never exceeds the inset: `width <= viewportWidth * insetFraction + 0.01`, same for height
+- aspect preserved to 0.01: `width / height` equals `tileWidth / tileHeight` or its reciprocal
+- `corners()` returns tl, tr, br, bl in that order
+- `unrotationOrder(false) == [0,1,2,3]`; `unrotationOrder(true) == [1,2,3,0]`
+- `isRotated`: quad 100×200 against tile 600×300 → true; quad 200×100 against 600×300 → false
+- `isRotated` is symmetric in log space: quad 200×100 and quad 100×200 give opposite answers for the same tile
+- `isRotated` for a square tile (300×300) → false for any quad, matching `frame`'s tie-break
+- `isRotated` agrees with `frame().rotated` when fed that frame's own width/height
+- zero or negative tile / viewport / quad dimensions throw `IllegalArgumentException`
+
+- [ ] **Step 3: Run tests**
+
+```bash
+./gradlew :sharedLogic:allTests --tests '*ScanGuideGeometryTest*'
+```
+Expected: all tests pass.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add sharedLogic/src/commonMain/kotlin/com/hasu/tilelayout/engine/ScanGuideGeometry.kt \
+        sharedLogic/src/commonTest/kotlin/com/hasu/tilelayout/engine/ScanGuideGeometryTest.kt
+git commit -m "feat: shared scan guide frame geometry with best-fit orientation"
+```
+
+---
+
+### Task 28: Edge Detection — iOS
 
 - [ ] **Step 1: Replace CameraView with EdgeDetectionCameraView**
 
@@ -1921,6 +2070,14 @@ struct EdgeDetectionCameraView: View {
         ZStack {
             EdgeDetectionPreview(session: model.session)
                 .ignoresSafeArea()
+
+            // Guide frame at the tile's aspect ratio — drawn UNDER the detection
+            // overlay so a live detection visually wins when there is one.
+            ScanGuideOverlay(
+                tileWidth: tileGroup.tileWidth,
+                tileHeight: tileGroup.tileHeight
+            )
+            .allowsHitTesting(false)
 
             // Semi-transparent overlay with rectangle cutout
             if let rect = model.detectedRect {
@@ -1945,7 +2102,13 @@ struct EdgeDetectionCameraView: View {
                 if model.isStable {
                     Text("Hold steady…").font(.caption).foregroundStyle(.green)
                         .padding(8).background(.black.opacity(0.5)).clipShape(Capsule())
+                } else if model.latestObservation == nil {
+                    Text("Align the tile with the frame")
+                        .font(.caption).foregroundStyle(.white)
+                        .padding(8).background(.black.opacity(0.5)).clipShape(Capsule())
                 }
+                // NOT gated on a detection: with no rectangle found, Review Corners
+                // opens seeded from the guide frame instead of dead-ending.
                 Button { showCornerReview = true } label: {
                     ZStack {
                         Circle().stroke(.white, lineWidth: 4).frame(width: 72, height: 72)
@@ -1953,7 +2116,6 @@ struct EdgeDetectionCameraView: View {
                             .frame(width: 60, height: 60)
                     }
                 }
-                .disabled(model.latestObservation == nil)
                 .padding(.bottom, 40)
             }
         }
@@ -1973,6 +2135,62 @@ struct EdgeDetectionCameraView: View {
     }
 }
 ```
+
+Sibling view file for the guide frame — needed for the above to compile:
+
+```swift
+// ScanGuideOverlay.swift
+import SwiftUI
+import SharedLogic
+
+/// Dashed frame at the tile's own aspect ratio, so the user can square the tile up
+/// before shooting. Geometry comes from the shared ScanGuideGeometry, so iOS and
+/// Android frame identically.
+struct ScanGuideOverlay: View {
+    let tileWidth: Double
+    let tileHeight: Double
+
+    /// Space reserved for the scanner's own chrome, so the frame never sits under
+    /// the close button or the shutter. Padding shrinks the measured region.
+    var chromeTop: CGFloat = 60
+    var chromeBottom: CGFloat = 140
+
+    var body: some View {
+        GeometryReader { geo in
+            let frame = ScanGuideGeometry.shared.frame(
+                viewportWidth: geo.size.width,
+                viewportHeight: geo.size.height,
+                tileWidth: tileWidth,
+                tileHeight: tileHeight,
+                insetFraction: 0.85
+            )
+            ZStack {
+                Rectangle()
+                    .stroke(.white.opacity(0.9),
+                            style: StrokeStyle(lineWidth: 2, dash: [8, 6]))
+                    .frame(width: frame.width, height: frame.height)
+                    .position(x: frame.x + frame.width / 2,
+                              y: frame.y + frame.height / 2)
+                    .shadow(radius: 2)
+
+                // Confirms which tile group is being scanned.
+                Text("\(Int(tileWidth)) × \(Int(tileHeight)) mm")
+                    .font(.caption2)
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(.black.opacity(0.5))
+                    .clipShape(Capsule())
+                    .position(x: frame.x + frame.width / 2,
+                              y: frame.y + frame.height + 16)
+            }
+        }
+        .padding(.top, chromeTop)
+        .padding(.bottom, chromeBottom)
+    }
+}
+```
+
+A Kotlin `object` is exported to Swift as a `.shared` singleton, and `GuideFrame`'s `Double` fields bridge directly — no conversion layer needed.
 
 - [ ] **Step 2: Implement EdgeDetectionModel with Vision**
 
@@ -2026,17 +2244,24 @@ final class EdgeDetectionModel: NSObject, ObservableObject {
     func stop() { sessionQueue.async { self.session.stopRunning() } }
     func toggleFlash() { /* torch on/off */ }
 
-    /// Snapshot the current detection state for the corner review screen.
-    func captureSnapshot() -> (CIImage, VNRectangleObservation)? {
-        // Called from main; reads the atomically-published snapshot
-        guard let obs = latestObservation, let buf = snapshotBuffer else { return nil }
-        return (CIImage(cvPixelBuffer: buf), obs)
+    /// Snapshot the current frame for the corner review screen.
+    /// The observation is OPTIONAL: when no rectangle was detected we still hand back
+    /// the image, so review can seed its corners from the guide frame instead of
+    /// dead-ending. Only a missing image buffer returns nil.
+    func captureSnapshot() -> (image: CIImage, observation: VNRectangleObservation?)? {
+        guard let buf = snapshotBuffer else { return nil }
+        return (CIImage(cvPixelBuffer: buf), latestObservation)
     }
 
     private func handleRectangles(_ request: VNRequest, _ error: Error?) {
         guard let results = request.results as? [VNRectangleObservation],
               let best = results.first else {
-            DispatchQueue.main.async { self.isStable = false; self.stableCount = 0; self.detectedRect = nil }
+            DispatchQueue.main.async {
+                self.isStable = false
+                self.stableCount = 0
+                self.detectedRect = nil
+                self.latestObservation = nil   // snapshotBuffer deliberately retained
+            }
             return
         }
         // Publish snapshot atomically
@@ -2045,7 +2270,6 @@ final class EdgeDetectionModel: NSObject, ObservableObject {
 
         DispatchQueue.main.async {
             self.latestObservation = best
-            self.snapshotBuffer = self._procPixelBuffer
             self.detectedRect = vr
             if let last = self.lastRect, self.rectsClose(last, vr) {
                 self.stableCount += 1
@@ -2081,6 +2305,10 @@ extension EdgeDetectionModel: AVCaptureVideoDataOutputSampleBufferDelegate {
                       from connection: AVCaptureConnection) {
         guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         _procPixelBuffer = pb
+        // Publish EVERY frame, not just detected ones — capture must work when
+        // detection finds nothing. This lands on main before the observation
+        // below (both hop from procQueue in order), so they stay the same frame.
+        DispatchQueue.main.async { self.snapshotBuffer = pb }
         try? VNImageRequestHandler(cvPixelBuffer: pb, orientation: .up, options: [:])
             .perform([rectRequest])
     }
@@ -2093,10 +2321,12 @@ extension EdgeDetectionModel: AVCaptureVideoDataOutputSampleBufferDelegate {
 // CornerReviewView.swift
 import SwiftUI
 import Vision
+import SharedLogic
 
 /// Allows user to drag 4 corner handles to adjust detected rectangle
 /// before perspective correction. Handles the case where auto-detection
-/// is imperfect (tiles on busy floors, partial occlusion, etc.).
+/// is imperfect (tiles on busy floors, partial occlusion, etc.) — and the
+/// case where it found nothing at all, seeding from the guide frame.
 struct CornerReviewView: View {
     let model: EdgeDetectionModel
     let tileWidth: Double
@@ -2148,13 +2378,28 @@ struct CornerReviewView: View {
         let ctx = CIContext()
         guard let cg = ctx.createCGImage(ciImage, from: ciImage.extent) else { return }
         previewImage = UIImage(cgImage: cg)
-        // Map observation normalized corners to view coordinates
         let w = ciImage.extent.width
         let h = ciImage.extent.height
-        topLeft = CGPoint(x: obs.topLeft.x * w, y: (1 - obs.topLeft.y) * h)
-        topRight = CGPoint(x: obs.topRight.x * w, y: (1 - obs.topRight.y) * h)
-        bottomLeft = CGPoint(x: obs.bottomLeft.x * w, y: (1 - obs.bottomLeft.y) * h)
-        bottomRight = CGPoint(x: obs.bottomRight.x * w, y: (1 - obs.bottomRight.y) * h)
+
+        if let obs {
+            // Map observation normalized corners to image pixel coordinates
+            topLeft = CGPoint(x: obs.topLeft.x * w, y: (1 - obs.topLeft.y) * h)
+            topRight = CGPoint(x: obs.topRight.x * w, y: (1 - obs.topRight.y) * h)
+            bottomLeft = CGPoint(x: obs.bottomLeft.x * w, y: (1 - obs.bottomLeft.y) * h)
+            bottomRight = CGPoint(x: obs.bottomRight.x * w, y: (1 - obs.bottomRight.y) * h)
+        } else {
+            // No rectangle detected — seed from the guide frame so the user has
+            // something to drag instead of a dead end.
+            let guide = ScanGuideGeometry.shared.frame(
+                viewportWidth: w, viewportHeight: h,
+                tileWidth: tileWidth, tileHeight: tileHeight,
+                insetFraction: 0.85
+            )
+            topLeft = CGPoint(x: guide.x, y: guide.y)
+            topRight = CGPoint(x: guide.x + guide.width, y: guide.y)
+            bottomRight = CGPoint(x: guide.x + guide.width, y: guide.y + guide.height)
+            bottomLeft = CGPoint(x: guide.x, y: guide.y + guide.height)
+        }
     }
 
     private func applyCorrection() {
@@ -2162,10 +2407,14 @@ struct CornerReviewView: View {
         let outputSize = PerspectiveCorrector.outputSize(
             tileWidth: tileWidth, tileHeight: tileHeight, maxDimension: 512
         )
+
+        // Rotation is derived inside the corrector from the corners themselves, so it
+        // covers the auto-detected and guide-seeded paths alike.
         guard let result = PerspectiveCorrector.correctWithCorners(
             image: ciImage,
             topLeft: topLeft, topRight: topRight,
             bottomLeft: bottomLeft, bottomRight: bottomRight,
+            tileWidth: tileWidth, tileHeight: tileHeight,
             outputSize: outputSize
         ) else { return }
         onAccept(result)
@@ -2180,6 +2429,7 @@ struct CornerReviewView: View {
 import UIKit
 import CoreImage
 import Vision
+import SharedLogic
 
 struct PerspectiveCorrector {
     /// Compute output size preserving the tile's aspect ratio.
@@ -2199,6 +2449,7 @@ struct PerspectiveCorrector {
     static func correct(
         image: CIImage,
         observation: VNRectangleObservation,
+        tileWidth: Double, tileHeight: Double,
         outputSize: CGSize
     ) -> UIImage? {
         let w = image.extent.width
@@ -2209,24 +2460,44 @@ struct PerspectiveCorrector {
             topRight: CGPoint(x: observation.topRight.x * w, y: observation.topRight.y * h),
             bottomLeft: CGPoint(x: observation.bottomLeft.x * w, y: observation.bottomLeft.y * h),
             bottomRight: CGPoint(x: observation.bottomRight.x * w, y: observation.bottomRight.y * h),
+            tileWidth: tileWidth, tileHeight: tileHeight,
             outputSize: outputSize
         )
     }
 
     /// Correct using explicit pixel-coordinate corners (from manual adjustment).
+    ///
+    /// When the tile was framed 90° from its natural orientation, the corner ORDER is
+    /// rotated back rather than the output image — the warp already resamples, so the
+    /// rotation costs nothing and outputSize stays natural (tileWidth × tileHeight).
+    /// Rotation is derived from the corners themselves, so it covers both the
+    /// auto-detected and guide-seeded paths.
     static func correctWithCorners(
         image: CIImage,
         topLeft: CGPoint, topRight: CGPoint,
         bottomLeft: CGPoint, bottomRight: CGPoint,
+        tileWidth: Double, tileHeight: Double,
         outputSize: CGSize
     ) -> UIImage? {
         guard let filter = CIFilter(name: "CIPerspectiveCorrection") else { return nil }
+
+        let ordered = [topLeft, topRight, bottomRight, bottomLeft]   // tl, tr, br, bl
+        let quadW = max(abs(topRight.x - topLeft.x), abs(bottomRight.x - bottomLeft.x))
+        let quadH = max(abs(bottomLeft.y - topLeft.y), abs(bottomRight.y - topRight.y))
+        let rotated = quadW > 0 && quadH > 0 && ScanGuideGeometry.shared.isRotated(
+            quadWidth: Double(quadW), quadHeight: Double(quadH),
+            tileWidth: tileWidth, tileHeight: tileHeight
+        )
+        // Still tl, tr, br, bl — now in the tile's natural orientation.
+        let c = ScanGuideGeometry.shared.unrotationOrder(rotated: rotated)
+            .map { ordered[$0.intValue] }
+
         filter.setValue(image, forKey: kCIInputImageKey)
         // CIPerspectiveCorrection uses bottom-left origin (same as CIImage)
-        filter.setValue(CIVector(cgPoint: topLeft), forKey: "inputTopLeft")
-        filter.setValue(CIVector(cgPoint: topRight), forKey: "inputTopRight")
-        filter.setValue(CIVector(cgPoint: bottomLeft), forKey: "inputBottomLeft")
-        filter.setValue(CIVector(cgPoint: bottomRight), forKey: "inputBottomRight")
+        filter.setValue(CIVector(cgPoint: c[0]), forKey: "inputTopLeft")
+        filter.setValue(CIVector(cgPoint: c[1]), forKey: "inputTopRight")
+        filter.setValue(CIVector(cgPoint: c[2]), forKey: "inputBottomRight")
+        filter.setValue(CIVector(cgPoint: c[3]), forKey: "inputBottomLeft")
         guard let corrected = filter.outputImage else { return nil }
         let scaleX = outputSize.width / corrected.extent.width
         let scaleY = outputSize.height / corrected.extent.height
@@ -2266,14 +2537,15 @@ func saveTexture(image: UIImage, tileGroupId: String, tileGroupRepo: TileGroupRe
 ```bash
 git add iosApp/iosApp/Views/EdgeDetectionCameraView.swift \
         iosApp/iosApp/Views/EdgeDetectionModel.swift \
+        iosApp/iosApp/Views/ScanGuideOverlay.swift \
         iosApp/iosApp/Views/CornerReviewView.swift \
         iosApp/iosApp/Views/PerspectiveCorrector.swift
-git commit -m "feat(ios): edge detection tile scanner with Vision + corner review + perspective correction"
+git commit -m "feat(ios): edge detection tile scanner with Vision, aspect-ratio guide frame, corner review + perspective correction"
 ```
 
 ---
 
-### Task 28: Edge Detection — Android
+### Task 29: Edge Detection — Android
 
 **Requires:** CameraX 1.3+ (for `ImageProxy.toBitmap()`), OpenCV Android SDK 4.8.0.
 
@@ -2329,6 +2601,9 @@ fun EdgeDetectionScreen(
                         val bitmap = imageProxy.toBitmap()
                         val corners = EdgeDetector.detectQuadCorners(bitmap)
                         imageProxy.close()
+                        // Kept on EVERY frame, not just detected ones — capture must
+                        // work when detection finds nothing.
+                        capturedBitmap = bitmap
                         if (corners != null) {
                             if (lastCorners != null && cornersClose(lastCorners!!, corners)) {
                                 stableCount++
@@ -2339,7 +2614,6 @@ fun EdgeDetectionScreen(
                             }
                             lastCorners = corners
                             detectedCorners = corners
-                            capturedBitmap = bitmap
                         } else {
                             stableCount = 0
                             isStable = false
@@ -2353,21 +2627,78 @@ fun EdgeDetectionScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        // Overlay + controls
+        // Guide frame first, so a live detection draws on top of it.
+        ScanGuideOverlay(
+            tileWidth = tileGroup.tileWidth,
+            tileHeight = tileGroup.tileHeight,
+        )
         EdgeOverlay(corners = detectedCorners)
-        CaptureControls(isStable = isStable, onCapture = {
-            showCornerReview = true
-        }, onDismiss = onDismiss)
+        // Capture is NOT gated on a detection: with no quad found, Review Corners
+        // opens seeded from the guide frame instead of dead-ending.
+        CaptureControls(
+            isStable = isStable,
+            hint = if (detectedCorners == null) "Align the tile with the frame" else null,
+            onCapture = { showCornerReview = true },
+            onDismiss = onDismiss,
+        )
     }
 
     if (showCornerReview) {
         CornerReviewScreen(
             bitmap = capturedBitmap,
-            initialCorners = detectedCorners,
+            initialCorners = detectedCorners,   // nullable — screen seeds from the guide
             tileWidth = tileGroup.tileWidth,
             tileHeight = tileGroup.tileHeight,
             onAccept = { corrected -> onCapture(corrected); onDismiss() },
             onRetry = { showCornerReview = false }
+        )
+    }
+}
+
+/**
+ * Dashed frame at the tile's aspect ratio, so the user can square the tile up before
+ * shooting. Geometry comes from the shared ScanGuideGeometry, so Android and iOS frame
+ * identically. Padding reserves room for the scanner's own chrome.
+ */
+@Composable
+private fun ScanGuideOverlay(tileWidth: Double, tileHeight: Double) {
+    val label = "${tileWidth.roundToInt()} × ${tileHeight.roundToInt()} mm"
+    val textMeasurer = rememberTextMeasurer()
+    val labelStyle = TextStyle(color = Color.White, fontSize = 12.sp)
+
+    Canvas(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(top = 56.dp, bottom = 140.dp)
+    ) {
+        val guide = ScanGuideGeometry.frame(
+            viewportWidth = size.width.toDouble(),
+            viewportHeight = size.height.toDouble(),
+            tileWidth = tileWidth,
+            tileHeight = tileHeight,
+            insetFraction = 0.85,
+        )
+        drawRect(
+            color = Color.White.copy(alpha = 0.9f),
+            topLeft = Offset(guide.x.toFloat(), guide.y.toFloat()),
+            size = Size(guide.width.toFloat(), guide.height.toFloat()),
+            style = Stroke(
+                width = 2.dp.toPx(),
+                pathEffect = PathEffect.dashPathEffect(
+                    floatArrayOf(8.dp.toPx(), 6.dp.toPx())
+                ),
+            ),
+        )
+        // Confirms which tile group is being scanned.
+        val measured = textMeasurer.measure(label, labelStyle)
+        drawText(
+            textMeasurer = textMeasurer,
+            text = label,
+            style = labelStyle,
+            topLeft = Offset(
+                (guide.x + guide.width / 2).toFloat() - measured.size.width / 2f,
+                (guide.y + guide.height).toFloat() + 8.dp.toPx(),
+            ),
         )
     }
 }
@@ -2462,8 +2793,30 @@ fun CornerReviewScreen(
     onAccept: (Bitmap) -> Unit,
     onRetry: () -> Unit
 ) {
-    var corners by remember { mutableStateOf(initialCorners ?: return) }
     val bmp = bitmap ?: return
+
+    // No detection — seed from the guide frame over the bitmap's own extent, so the
+    // user has something to drag instead of a dead end.
+    var corners by remember(bmp, initialCorners) {
+        mutableStateOf(
+            initialCorners ?: ScanGuideGeometry
+                .frame(
+                    viewportWidth = bmp.width.toDouble(),
+                    viewportHeight = bmp.height.toDouble(),
+                    tileWidth = tileWidth,
+                    tileHeight = tileHeight,
+                    insetFraction = 0.85,
+                )
+                .let { g ->
+                    QuadCorners(
+                        tl = PointF(g.x.toFloat(), g.y.toFloat()),
+                        tr = PointF((g.x + g.width).toFloat(), g.y.toFloat()),
+                        br = PointF((g.x + g.width).toFloat(), (g.y + g.height).toFloat()),
+                        bl = PointF(g.x.toFloat(), (g.y + g.height).toFloat()),
+                    )
+                }
+        )
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         Text("Adjust Corners", style = MaterialTheme.typography.titleMedium,
@@ -2482,7 +2835,13 @@ fun CornerReviewScreen(
             OutlinedButton(onClick = onRetry) { Text("Re-scan") }
             Button(onClick = {
                 val outputSize = PerspectiveCorrector.outputSize(tileWidth, tileHeight, maxDimension = 512)
-                val corrected = PerspectiveCorrector.correct(bmp, corners, outputSize)
+                val corrected = PerspectiveCorrector.correct(
+                    source = bmp,
+                    corners = corners,
+                    tileWidth = tileWidth,
+                    tileHeight = tileHeight,
+                    outputSize = outputSize,
+                )
                 onAccept(corrected)
             }) { Text("Accept") }
         }
@@ -2495,6 +2854,8 @@ fun CornerReviewScreen(
 ```kotlin
 // PerspectiveCorrector.kt
 import android.graphics.*
+import com.hasu.tilelayout.engine.ScanGuideGeometry
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 object PerspectiveCorrector {
@@ -2508,12 +2869,38 @@ object PerspectiveCorrector {
         }
     }
 
-    fun correct(source: Bitmap, corners: QuadCorners, outputSize: Size): Bitmap {
+    /**
+     * Warp [corners] onto an [outputSize] bitmap.
+     *
+     * When the tile was framed 90° from its natural orientation, the corner ORDER is
+     * rotated back rather than the output image — the warp already resamples, so the
+     * rotation costs nothing and [outputSize] stays natural (tileWidth × tileHeight).
+     * Rotation is derived from the corners themselves, so it covers both the
+     * auto-detected and guide-seeded paths.
+     */
+    fun correct(
+        source: Bitmap,
+        corners: QuadCorners,
+        tileWidth: Double,
+        tileHeight: Double,
+        outputSize: Size,
+    ): Bitmap {
+        val ordered = listOf(corners.tl, corners.tr, corners.br, corners.bl)
+        val quadW = maxOf(
+            abs(corners.tr.x - corners.tl.x), abs(corners.br.x - corners.bl.x)
+        ).toDouble()
+        val quadH = maxOf(
+            abs(corners.bl.y - corners.tl.y), abs(corners.br.y - corners.tr.y)
+        ).toDouble()
+        val rotated = quadW > 0 && quadH > 0 &&
+            ScanGuideGeometry.isRotated(quadW, quadH, tileWidth, tileHeight)
+        val c = ScanGuideGeometry.unrotationOrder(rotated).map { ordered[it] }
+
         val w = outputSize.width.toFloat()
         val h = outputSize.height.toFloat()
         val src = floatArrayOf(
-            corners.tl.x, corners.tl.y, corners.tr.x, corners.tr.y,
-            corners.br.x, corners.br.y, corners.bl.x, corners.bl.y)
+            c[0].x, c[0].y, c[1].x, c[1].y,
+            c[2].x, c[2].y, c[3].x, c[3].y)
         val dst = floatArrayOf(0f, 0f, w, 0f, w, h, 0f, h)
         val matrix = Matrix()
         matrix.setPolyToPoly(src, 0, dst, 0, 4)
@@ -2534,12 +2921,12 @@ git add androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetectionScr
         androidApp/src/main/java/com/hasu/tilelayout/ui/screens/CornerReviewScreen.kt \
         androidApp/src/main/java/com/hasu/tilelayout/ui/screens/EdgeDetector.kt \
         androidApp/src/main/java/com/hasu/tilelayout/ui/screens/PerspectiveCorrector.kt
-git commit -m "feat(android): edge detection tile scanner with OpenCV + corner review + CameraX 1.3"
+git commit -m "feat(android): edge detection tile scanner with OpenCV, aspect-ratio guide frame, corner review + CameraX 1.3"
 ```
 
 ---
 
-### Task 29: Shared Texture Storage Path
+### Task 30: Shared Texture Storage Path
 
 - [ ] **Step 1: Add `expect` texture base directory to shared module**
 
@@ -2583,4 +2970,4 @@ git commit -m "feat: shared TextureStorage helper for captured texture file path
 
 ---
 
-**Plan updated.** 29 tasks across 11 phases. Phases 1-6 shared Kotlin. Phases 7-8 thin platform UIs. Phase 9 integration. Phase 10 door wall feature (door config, door-relative names, preview rendering, layout exclusion). Phase 11 edge detection with manual corner review fallback on both platforms.
+**Plan updated.** 30 tasks across 11 phases. Phases 1-6 shared Kotlin. Phases 7-8 thin platform UIs. Phase 9 integration. Phase 10 door wall feature (door config, door-relative names, preview rendering, layout exclusion). Phase 11 edge detection with an aspect-ratio scan guide frame, manual corner review, and a guide-seeded fallback so capture never dead-ends on a failed detection.
