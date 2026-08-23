@@ -5,19 +5,15 @@ import android.graphics.Canvas
 import android.graphics.Matrix
 import android.graphics.Paint
 import android.util.Size
+import com.hasu.tilelayout.engine.PerspectiveSizing
 import com.hasu.tilelayout.engine.ScanGuideGeometry
 import kotlin.math.abs
-import kotlin.math.roundToInt
 
 object PerspectiveCorrector {
     /** Compute output size preserving tile aspect ratio, fitting within maxDimension. */
     fun outputSize(tileWidth: Double, tileHeight: Double, maxDimension: Int = 512): Size {
-        val aspect = tileWidth / tileHeight
-        return if (aspect >= 1.0) {
-            Size(maxDimension, (maxDimension / aspect).roundToInt())
-        } else {
-            Size((maxDimension * aspect).roundToInt(), maxDimension)
-        }
+        val s = PerspectiveSizing.outputSize(tileWidth, tileHeight, maxDimension)
+        return Size(s.width, s.height)
     }
 
     /**

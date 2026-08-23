@@ -5,14 +5,13 @@ import SharedLogic
 
 struct PerspectiveCorrector {
     /// Compute output size preserving the tile's aspect ratio.
-    /// Fits within maxDimension on the longest side.
+    /// Fits within maxDimension on the longest side. Delegates to the shared
+    /// PerspectiveSizing so iOS and Android clamp identically (never < 1px).
     static func outputSize(tileWidth: Double, tileHeight: Double, maxDimension: CGFloat = 512) -> CGSize {
-        let aspect = tileWidth / tileHeight
-        if aspect >= 1.0 {
-            return CGSize(width: maxDimension, height: maxDimension / aspect)
-        } else {
-            return CGSize(width: maxDimension * aspect, height: maxDimension)
-        }
+        let s = PerspectiveSizing.shared.outputSize(
+            tileWidth: tileWidth, tileHeight: tileHeight, maxDimension: Int32(maxDimension)
+        )
+        return CGSize(width: CGFloat(s.width), height: CGFloat(s.height))
     }
 
     /// Correct using a VNRectangleObservation (auto-detected corners).
