@@ -74,6 +74,22 @@ final class EdgeDetectionModel: NSObject, ObservableObject {
         }
     }
 
+    /// Freeze the frame stream while the corner review is open, so Accept warps
+    /// exactly the frame the user aligned against — not a later one. Mirrors the
+    /// Android scanner's paused analyzer.
+    func pause() {
+        sessionQueue.async { [weak self] in
+            self?.session.stopRunning()
+        }
+    }
+
+    func resume() {
+        sessionQueue.async { [weak self] in
+            guard let self, !self.session.isRunning else { return }
+            self.session.startRunning()
+        }
+    }
+
     func toggleFlash() {
         sessionQueue.async { [weak self] in
             guard let self,

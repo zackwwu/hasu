@@ -14,6 +14,8 @@ struct CornerReviewView: View {
     let model: EdgeDetectionModel
     let tileWidth: Double
     let tileHeight: Double
+    /// Called before dismissing back to the live camera (session was paused on open).
+    let onRetry: () -> Void
     let onAccept: (UIImage) -> Void
     @Environment(\.dismiss) private var dismiss
 
@@ -66,8 +68,11 @@ struct CornerReviewView: View {
             }
 
             HStack(spacing: 20) {
-                Button("Re-scan") { dismiss() }
-                    .buttonStyle(.bordered)
+                Button("Re-scan") {
+                    onRetry()
+                    dismiss()
+                }
+                .buttonStyle(.bordered)
                 Button("Accept") { applyCorrection() }
                     .buttonStyle(.borderedProminent)
             }

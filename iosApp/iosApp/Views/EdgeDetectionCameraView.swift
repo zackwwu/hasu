@@ -56,7 +56,12 @@ struct EdgeDetectionCameraView: View {
                     }
                     // NOT gated on a detection: with no rectangle found, Review Corners
                     // opens seeded from the guide frame instead of dead-ending.
-                    Button { showCornerReview = true } label: {
+                    // Pause first so the reviewed snapshot stays the frame the user
+                    // tapped on (the session otherwise keeps streaming behind the cover).
+                    Button {
+                        model.pause()
+                        showCornerReview = true
+                    } label: {
                         ZStack {
                             Circle().stroke(.white, lineWidth: 4).frame(width: 72, height: 72)
                             Circle().fill(model.isStable ? Color.green : Color.white)
@@ -78,6 +83,7 @@ struct EdgeDetectionCameraView: View {
                 model: model,
                 tileWidth: tileGroup.tileWidth,
                 tileHeight: tileGroup.tileHeight,
+                onRetry: { model.resume() },
                 onAccept: { image in
                     onCapture(image)
                     dismiss()
