@@ -23,6 +23,14 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodelCompose)
     implementation(libs.androidx.lifecycle.runtimeCompose)
 
+    // CameraX 1.3+ required for ImageProxy.toBitmap()
+    implementation(libs.camerax.core)
+    implementation(libs.camerax.camera2)
+    implementation(libs.camerax.lifecycle)
+    implementation(libs.camerax.view)
+    // OpenCV Android SDK — ~30MB, includes native libs for arm64/x86_64
+    implementation(libs.opencv)
+
     implementation(libs.sqldelight.android)
 
     implementation(libs.compose.uiToolingPreview)

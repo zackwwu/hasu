@@ -15,7 +15,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.hasu.tilelayout.data.AppDatabase
-import com.hasu.tilelayout.ui.screens.CameraScreen
+import com.hasu.tilelayout.ui.screens.EdgeDetectionScreen
 import com.hasu.tilelayout.ui.screens.HomeScreen
 import com.hasu.tilelayout.ui.screens.ProjectDetailScreen
 import com.hasu.tilelayout.ui.screens.RegionEditorScreen
@@ -113,7 +113,7 @@ fun TileLayoutApp() {
                     )
                 }
 
-                is Screen.Camera -> CameraScreen(
+                is Screen.Camera -> EdgeDetectionScreen(
                     tileGroupId = current.tileGroupId,
                     onDismiss = { screen = Screen.ProjectDetail(current.projectId) },
                 )
