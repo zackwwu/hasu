@@ -1,12 +1,16 @@
 import SwiftUI
 import SharedLogic
 
-/// Lists tile groups for a project. Supports add/edit/delete.
+/// Kotlin models don't bridge Identifiable — add it for fullScreenCover(item:).
+extension TileGroup: Identifiable {}
+
+/// Lists tile groups for a project. Supports add/edit/delete and texture capture.
 struct TileLibraryView: View {
     let projectId: String
 
     @State private var tileGroups: [TileGroup] = []
     @State private var showAdd = false
+    @State private var capturingTileGroup: TileGroup?
 
     private let tileGroupRepo: TileGroupRepository
 
@@ -27,7 +31,9 @@ struct TileLibraryView: View {
             } else {
                 List {
                     ForEach(tileGroups, id: \.id) { tg in
-                        TileGroupRow(tileGroup: tg)
+                        TileGroupRow(tileGroup: tg) {
+                            capturingTileGroup = tg
+                        }
                     }
                     .onDelete { indexSet in
                         let repo = tileGroupRepo
@@ -54,6 +60,14 @@ struct TileLibraryView: View {
                 Task { await load() }
             }
         }
+        .fullScreenCover(item: $capturingTileGroup) { tg in
+            EdgeDetectionCameraView(tileGroup: tg) { image in
+                Task {
+                    await saveTexture(image: image, tileGroup: tg)
+                    capturingTileGroup = nil
+                }
+            }
+        }
         .task { await load() }
     }
 
@@ -64,12 +78,38 @@ struct TileLibraryView: View {
             print("Load tile groups failed: \(error)")
         }
     }
+
+    /// Save the scanned texture PNG and update the tile group so the SourceBadge
+    /// flips to "Photo". Mirrors AddTileGroupSheet's TileGroup construction.
+    private func saveTexture(image: UIImage, tileGroup: TileGroup) async {
+        let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("textures", isDirectory: true)
+        do {
+            try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+            let fileURL = dir.appendingPathComponent("\(tileGroup.id).png")
+            try image.pngData()?.write(to: fileURL)
+
+            // Fetch the existing group, then re-insert with the new texture + source.
+            if let tg = try? await tileGroupRepo.getById(id: tileGroup.id) {
+                let updated = TileGroup(
+                    id: tg.id, projectId: tg.projectId, name: tg.name,
+                    tileWidth: tg.tileWidth, tileHeight: tg.tileHeight,
+                    texturePath: fileURL.path, source: TileSource.captured
+                )
+                try? await tileGroupRepo.insert(tileGroup: updated)
+            }
+        } catch {
+            print("Save texture failed: \(error)")
+        }
+        await load()
+    }
 }
 
 // MARK: - Tile Group Row
 
 private struct TileGroupRow: View {
     let tileGroup: TileGroup
+    let onCapture: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -91,6 +131,16 @@ private struct TileGroupRow: View {
             }
 
             Spacer()
+
+            // Capture entry point: opens the edge-detection scanner fullscreen.
+            Button(action: onCapture) {
+                Image(systemName: "camera")
+                    .font(.system(size: 14))
+                    .foregroundStyle(.teal)
+                    .frame(width: 32, height: 32)
+            }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("capture-tile-group")
 
             SourceBadge(source: tileGroup.source)
         }
