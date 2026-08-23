@@ -133,16 +133,22 @@ struct CornerReviewView: View {
 
     private func applyCorrection() {
         guard let (ciImage, _) = model.captureSnapshot() else { return }
+        let h = ciImage.extent.height
         let outputSize = PerspectiveCorrector.outputSize(
             tileWidth: tileWidth, tileHeight: tileHeight, maxDimension: 512
         )
 
         // Rotation is derived inside the corrector from the corners themselves, so it
         // covers the auto-detected and guide-seeded paths alike.
+        // Corner state is top-left-origin image pixels (what the user dragged);
+        // CIPerspectiveCorrection samples bottom-left-origin CIImage space, so flip y
+        // before handing over — otherwise the saved texture is vertically mirrored.
         guard let result = PerspectiveCorrector.correctWithCorners(
             image: ciImage,
-            topLeft: topLeft, topRight: topRight,
-            bottomLeft: bottomLeft, bottomRight: bottomRight,
+            topLeft: CGPoint(x: topLeft.x, y: h - topLeft.y),
+            topRight: CGPoint(x: topRight.x, y: h - topRight.y),
+            bottomLeft: CGPoint(x: bottomLeft.x, y: h - bottomLeft.y),
+            bottomRight: CGPoint(x: bottomRight.x, y: h - bottomRight.y),
             tileWidth: tileWidth, tileHeight: tileHeight,
             outputSize: outputSize
         ) else { return }
