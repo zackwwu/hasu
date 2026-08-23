@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Lists tile groups for a project. Supports add (FAB + dialog), swipe-to-delete,
- * and tap-through to the camera screen (capture is Phase 10).
+ * and tap-through to the camera scanner (edge detection + corner review).
  */
 @Composable
 fun TileLibraryScreen(
