@@ -6,12 +6,15 @@ import com.hasu.tilelayout.db.ProjectRepository
 import com.hasu.tilelayout.db.RoomRepository
 import com.hasu.tilelayout.db.SurfaceRepository
 import com.hasu.tilelayout.db.TileGroupRepository
+import com.hasu.tilelayout.engine.DoorGeometry
 import com.hasu.tilelayout.engine.IsometricProjection
 import com.hasu.tilelayout.engine.LayoutEngine
+import com.hasu.tilelayout.engine.WorldPoint
 import com.hasu.tilelayout.models.CutEntry
 import com.hasu.tilelayout.models.LayoutResult
 import com.hasu.tilelayout.models.PlacedTile
 import com.hasu.tilelayout.models.Project
+import com.hasu.tilelayout.models.RegionRect
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
@@ -107,6 +110,16 @@ class RoomEditorViewModel(
     private val _currentTiles = MutableStateFlow<List<PlacedTile>>(emptyList())
     val currentTiles: StateFlow<List<PlacedTile>> = _currentTiles
 
+    /** surfaceId → door world-space corners, for the 3D preview canvases. */
+    private val _doorWorldRects =
+        MutableStateFlow<Map<String, List<WorldPoint>>>(emptyMap())
+    val doorWorldRects: StateFlow<Map<String, List<WorldPoint>>> =
+        _doorWorldRects
+
+    /** surfaceId → door surface-local rect, for the 2D layout canvases. */
+    private val _doorLocalRects = MutableStateFlow<Map<String, RegionRect>>(emptyMap())
+    val doorLocalRects: StateFlow<Map<String, RegionRect>> = _doorLocalRects
+
     private val _cutEntries = MutableStateFlow<List<CutEntry>>(emptyList())
     val cutEntries: StateFlow<List<CutEntry>> = _cutEntries
 
@@ -116,8 +129,27 @@ class RoomEditorViewModel(
 
     suspend fun loadSurfaces(roomId: String) {
         _surfaces.value = surfaceRepo.getByRoom(roomId)
+        refreshDoorRects(roomId)
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
         recomputeCutEntries()
+    }
+
+    /** Recompute door rects (world + surface-local) for every loaded surface. */
+    private suspend fun refreshDoorRects(roomId: String) {
+        val room = roomRepo.getById(roomId)
+        if (room == null) {
+            _doorWorldRects.value = emptyMap()
+            _doorLocalRects.value = emptyMap()
+            return
+        }
+        val worldRects = mutableMapOf<String, List<WorldPoint>>()
+        val localRects = mutableMapOf<String, RegionRect>()
+        for (surface in _surfaces.value) {
+            DoorGeometry.surfaceLocalRect(room, surface)?.let { localRects[surface.id] = it }
+            DoorGeometry.worldCorners(room, surface)?.let { worldRects[surface.id] = it }
+        }
+        _doorLocalRects.value = localRects
+        _doorWorldRects.value = worldRects
     }
 
     suspend fun selectSurface(id: String?) {
@@ -310,6 +342,8 @@ class RoomEditorViewModel(
     suspend fun computeLayout(surfaceId: String) {
         val surface = surfaceRepo.getById(surfaceId) ?: return
         val stgs = surfaceRepo.getSTGsBySurface(surfaceId)
+        val room = roomRepo.getById(surface.roomId)
+        val doorRect = room?.let { DoorGeometry.surfaceLocalRect(it, surface) }
 
         val tiles = withContext(Dispatchers.Default) {
             stgs.flatMap { stg ->
@@ -321,6 +355,9 @@ class RoomEditorViewModel(
                     pattern = stg.pattern,
                     offsetX = stg.offsetX,
                     offsetY = stg.offsetY,
+                    exclusions = listOfNotNull(
+                        doorRect?.let { exclusionForRegion(it, stg.region) }
+                    ),
                 )
             }
         }
@@ -332,6 +369,22 @@ class RoomEditorViewModel(
             _currentTiles.value = tiles
         }
         recomputeCutEntries()
+    }
+
+    /**
+     * Translate a surface-local door rect into an STG-region-local exclusion,
+     * or null when the door does not touch this region (e.g. sub-regions that
+     * don't cover the door wall's door area).
+     */
+    private fun exclusionForRegion(doorRect: RegionRect, region: RegionRect): RegionRect? {
+        val local = RegionRect(
+            x = doorRect.x - region.x,
+            y = doorRect.y - region.y,
+            width = doorRect.width,
+            height = doorRect.height,
+        )
+        val regionLocal = RegionRect(0.0, 0.0, region.width, region.height)
+        return if (local.overlaps(regionLocal)) local else null
     }
 
     private suspend fun loadLayoutForSurface(surfaceId: String) {

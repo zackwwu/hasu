@@ -11,7 +11,8 @@ struct IsometricCanvas {
         surfaces: [Surface],
         viewAngle: Int,
         selectedSurfaceId: String?,
-        zoom: Double = 1.0
+        zoom: Double = 1.0,
+        doorWorldRects: [String: [SIMD3<Double>]] = [:]
     ) {
         let projection = IsometricProjection()
         let fit = projection.fitViewport(
@@ -78,6 +79,31 @@ struct IsometricCanvas {
             let strokeWidth: CGFloat = isSelected ? 3.0 : 1.2
             let strokeColor: Color = isSelected ? .blue : Color(red: 0.62, green: 0.58, blue: 0.52)
             context.stroke(path, with: .color(strokeColor), lineWidth: strokeWidth)
+
+            // Door opening: dark cutout drawn after the wall fill, before the label
+            if let doorCorners = doorWorldRects[surface.id] {
+                var doorPath = Path()
+                let scale = fit.scale * zoom
+                for (i, corner) in doorCorners.enumerated() {
+                    let sp = projection.project(
+                        sx: corner.x * scale,
+                        sy: corner.y * scale,
+                        sz: corner.z * scale,
+                        viewAngle: Int32(viewAngle),
+                        originX: fit.originX,
+                        originY: fit.originY
+                    )
+                    let point = CGPoint(x: sp.x, y: sp.y)
+                    if i == 0 {
+                        doorPath.move(to: point)
+                    } else {
+                        doorPath.addLine(to: point)
+                    }
+                }
+                doorPath.closeSubpath()
+                context.fill(doorPath, with: .color(Color(red: 0x3A / 255.0, green: 0x3A / 255.0, blue: 0x3A / 255.0)))
+                context.stroke(doorPath, with: .color(Color(red: 0x6E / 255.0, green: 0x66 / 255.0, blue: 0x58 / 255.0)), lineWidth: 1.2)
+            }
 
             // Draw surface label at centroid
             let cx = corners.map(\.x).reduce(0, +) / CGFloat(corners.count)

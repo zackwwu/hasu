@@ -158,7 +158,8 @@ struct RegionEditorView: View {
                 height: 1200,
                 position: SurfacePosition(x: 0, y: 0, z: 0, rotation: 0),
                 groutColor: GroutColor.grey,
-                groutWidth: 3
+                groutWidth: 3,
+                doorRotation: nil
             )
         )
     }

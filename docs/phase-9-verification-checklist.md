@@ -73,3 +73,35 @@ Same flow as iOS, with Android-specific labels.
 - [ ] Export with no surface selected on the Layout tab: appropriate message/disabled state, no crash
 - [ ] Rapid drag on the Layout Canvas immediately followed by Export: no crash, export completes with the last-rendered layout
 - [ ] After multiple layout adjustments (drag, undo, re-drag, offset changes), the Cut List shows correct counts consistent with the final layout on both platforms
+
+---
+
+## Section 7: Phase 10 Door Feature Verification
+
+Shared suite first, then the walkthrough on both platforms.
+
+- [ ] `./gradlew :sharedLogic:jvmTest` passes — includes `RoomDoorRepositoryTest` (updateDoor persist/clear/defaults), `SurfaceRepositoryDoorJoinTest` (JOIN → doorRotation, getById fallback), `DoorGeometryTest`, `DoorPickerGeometryTest`, and the `LayoutEngineTest` exclusion additions (grid/brick/herringbone drop door tiles, adjacent tiles carry cut edges)
+- [ ] Maestro flow `.maestro/phase-10-door.yaml` passes on Android (and iOS where Maestro is available); screenshots show renamed walls, the Layout door gap, and the Preview door opening
+
+### Door creation (creation sheet diagram)
+
+- [ ] Add-room dialog/sheet: a mini top-down diagram appears under the dimension fields with Front/Back/Left/Right edge labels; the **Front** edge is highlighted by default (door defaults to Front = z=0)
+- [ ] Tap the **Back** edge → Back edge highlights with a door notch; tap **None** → no edge highlighted; create the room with **None** → walls keep coordinate names after generating surfaces ("Front Wall" = z=0, "Back Wall" = z=depth, "Left Wall", "Right Wall")
+- [ ] Create a room leaving the diagram on **Front** → generate surfaces → the surfaces list shows **"Door Wall"** (the z=0 wall), **"Front Wall"** (the opposite wall), **"Left Wall"** (left of the door), **"Right Wall"** (right of the door)
+
+### Door card (Surfaces tab)
+
+- [ ] A **Door** card/section sits between the room-dimensions line and the surface list — visible before AND after generating surfaces
+- [ ] With no door set: width/height/offset fields are disabled and empty; **Save Door** is disabled
+- [ ] Tap an edge on the card's diagram → fields enable; the offset auto-fills with the centered value and shows the "Auto-centered on wall selection" caption until edited
+- [ ] Validation captions: width outside 400–wall-width shows "Door width must be 400–N mm"; height outside 1500–wall-height shows "Door height must be 1500–N mm"; offset outside 0–(wall−door) shows "Offset must be 0–N mm"; **Save Door** stays disabled while an error shows
+- [ ] **Save Door** → wall names in the surfaces list and preview labels update immediately (no restart)
+- [ ] After saving, **Save Door** is disabled again (not dirty); editing a field re-enables it
+- [ ] **None** + **Save Door** clears the door; walls revert to coordinate names
+
+### Layout / Preview / Cut List
+
+- [ ] Layout tab, door wall selected: the door area shows as a gap in the tiles with a dashed gray outline rectangle; tiles intersecting the door are absent
+- [ ] Preview tab: the door wall renders a dark opening (cutout) at the door position, on the correct wall, for all four door walls (move the door to Left/Right/Back and verify the opening follows)
+- [ ] Cut List: door-adjacent cut tiles appear (cut entries with Left/Right/Top/Bottom edge cuts where tiles meet the door boundary); tiles that would intersect the door do not appear
+- [ ] Drag offsets on the door wall → door gap stays put (exclusion is fixed to the wall, not the tile grid); Undo works as before

@@ -26,6 +26,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
     val selectedId by vm.selectedSurfaceId.collectAsState()
     val viewAngle by vm.viewAngle.collectAsState()
     val previewZoom by vm.previewZoom.collectAsState()
+    val doorWorldRects by vm.doorWorldRects.collectAsState()
     val scope = rememberCoroutineScope()
     val textMeasurer = rememberTextMeasurer()
     var topDown by remember { mutableStateOf(false) }
@@ -72,6 +73,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                 selectedSurfaceId = selectedId,
                 zoom = previewZoom,
                 textMeasurer = textMeasurer,
+                doorWorldRects = doorWorldRects,
             )
         }
 

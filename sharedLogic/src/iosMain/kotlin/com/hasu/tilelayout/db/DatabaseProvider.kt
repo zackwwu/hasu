@@ -16,6 +16,9 @@ import kotlinx.coroutines.SupervisorJob
  */
 object DatabaseProvider {
     private val db: TileLayoutDb by lazy {
+        // SQLDelight 2.0.2's NativeSqliteDriver wires TileLayoutDb.Schema.migrate into
+        // the sqliter DatabaseConfiguration.upgrade hook automatically, so a schema
+        // version bump (1 -> 2 via 1.sqm) runs migrations with no explicit callback.
         TileLayoutDb(NativeSqliteDriver(TileLayoutDb.Schema, "tilelayout.db"))
     }
 

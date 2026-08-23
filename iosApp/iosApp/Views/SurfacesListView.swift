@@ -20,50 +20,6 @@ struct SurfacesListView: View {
     }
 
     var body: some View {
-        Group {
-            if vm.surfaces.isEmpty {
-                emptyState
-            } else {
-                surfaceList
-            }
-        }
-        .task {
-            await loadRoomInfo()
-        }
-    }
-
-    // MARK: - Empty State
-
-    private var emptyState: some View {
-        VStack(spacing: 20) {
-            if let room {
-                VStack(spacing: 4) {
-                    Text(room.name)
-                        .font(.headline)
-                    Text("\(Int(room.width)) × \(Int(room.depth)) × \(Int(room.height)) mm")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            ContentUnavailableView(
-                "No Surfaces",
-                systemImage: "square.split.bottomrightquarter",
-                description: Text("Generate wall and floor surfaces from room dimensions.")
-            )
-
-            Button {
-                Task { await generateDefaultSurfaces() }
-            } label: {
-                Label("Generate Surfaces", systemImage: "sparkles")
-            }
-            .buttonStyle(.borderedProminent)
-        }
-    }
-
-    // MARK: - Surface List
-
-    private var surfaceList: some View {
         List {
             if let room {
                 Section("Room") {
@@ -76,18 +32,63 @@ struct SurfacesListView: View {
                             .foregroundStyle(.secondary)
                     }
                 }
-            }
 
-            Section("Surfaces (\(vm.surfaces.count))") {
-                ForEach(vm.surfaces, id: \.id) { surface in
-                    NavigationLink {
-                        SurfaceDetailView(surface: surface, vm: vm)
-                    } label: {
-                        SurfaceRow(surface: surface)
+                Section("Door") {
+                    DoorSectionView(room: room, roomRepo: roomRepo) {
+                        await loadRoomInfo()
+                        await vm.load(roomId: roomId)
                     }
+                    .id(doorSectionId(room))
+                }
+
+                if vm.surfaces.isEmpty {
+                    Section {
+                        VStack(spacing: 16) {
+                            ContentUnavailableView(
+                                "No Surfaces",
+                                systemImage: "square.split.bottomrightquarter",
+                                description: Text("Generate wall and floor surfaces from room dimensions.")
+                            )
+
+                            Button {
+                                Task { await generateDefaultSurfaces() }
+                            } label: {
+                                Label("Generate Surfaces", systemImage: "sparkles")
+                            }
+                            .buttonStyle(.borderedProminent)
+                        }
+                        .padding(.vertical, 8)
+                    }
+                } else {
+                    Section("Surfaces (\(vm.surfaces.count))") {
+                        ForEach(vm.surfaces, id: \.id) { surface in
+                            NavigationLink {
+                                SurfaceDetailView(surface: surface, vm: vm)
+                            } label: {
+                                SurfaceRow(surface: surface)
+                            }
+                        }
+                    }
+                }
+            } else {
+                Section {
+                    ContentUnavailableView(
+                        "No Room",
+                        systemImage: "cube",
+                        description: Text("Room data could not be loaded.")
+                    )
                 }
             }
         }
+        .task {
+            await loadRoomInfo()
+        }
+    }
+
+    /// Re-initializes the door section's editing state whenever the persisted
+    /// door values change (after a save), resetting the dirty flag.
+    private func doorSectionId(_ room: Room) -> String {
+        "\(room.id)-\(room.doorWall?.doubleValue ?? -1)-\(room.doorWidth)-\(room.doorHeight)-\(room.doorOffset?.doubleValue ?? -1)"
     }
 
     // MARK: - Surface Generation

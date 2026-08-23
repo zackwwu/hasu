@@ -22,7 +22,8 @@ struct PreviewTabView: View {
                         surfaces: vm.surfaces,
                         viewAngle: vm.viewAngle,
                         selectedSurfaceId: vm.selectedSurfaceId,
-                        zoom: vm.previewZoom
+                        zoom: vm.previewZoom,
+                        doorWorldRects: vm.doorWorldRects
                     )
                 }
                 .contentShape(Rectangle())

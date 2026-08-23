@@ -6,6 +6,7 @@ interface RoomRepository {
     suspend fun getByProject(projectId: String): List<Room>
     suspend fun getById(id: String): Room?
     suspend fun insert(room: Room)
+    suspend fun updateDoor(roomId: String, doorWall: Double?, doorWidth: Double, doorHeight: Double, doorOffset: Double?)
     suspend fun delete(id: String)
 }
 
@@ -27,6 +28,26 @@ class SqlDelightRoomRepository(private val queries: TileLayoutDbQueries) : RoomR
             width = room.width,
             depth = room.depth,
             height = room.height,
+            door_wall = room.doorWall?.toString(),
+            door_width = room.doorWidth,
+            door_height = room.doorHeight,
+            door_offset = room.doorOffset,
+        )
+    }
+
+    override suspend fun updateDoor(
+        roomId: String,
+        doorWall: Double?,
+        doorWidth: Double,
+        doorHeight: Double,
+        doorOffset: Double?,
+    ) {
+        queries.updateRoomDoor(
+            door_wall = doorWall?.toString(),
+            door_width = doorWidth,
+            door_height = doorHeight,
+            door_offset = doorOffset,
+            id = roomId,
         )
     }
 
@@ -42,4 +63,8 @@ internal fun Rooms.toRoom(): Room = Room(
     width = width,
     depth = depth,
     height = height,
+    doorWall = door_wall?.toDoubleOrNull(),
+    doorWidth = door_width ?: 900.0,
+    doorHeight = door_height ?: 2100.0,
+    doorOffset = door_offset,
 )

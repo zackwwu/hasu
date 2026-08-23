@@ -23,6 +23,10 @@ CREATE TABLE rooms (
     width REAL NOT NULL,
     depth REAL NOT NULL,
     height REAL NOT NULL,
+    door_wall TEXT,
+    door_width REAL,
+    door_height REAL,
+    door_offset REAL,
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
 
@@ -121,13 +125,20 @@ getRoomById:
 SELECT * FROM rooms WHERE id = ?;
 
 insertRoom:
-INSERT OR REPLACE INTO rooms(id, project_id, name, width, depth, height) VALUES (?, ?, ?, ?, ?, ?);
+INSERT OR REPLACE INTO rooms(id, project_id, name, width, depth, height, door_wall, door_width, door_height, door_offset)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+updateRoomDoor:
+UPDATE rooms SET door_wall = ?, door_width = ?, door_height = ?, door_offset = ?
+WHERE id = ?;
 
 deleteRoom:
 DELETE FROM rooms WHERE id = ?;
 
 getSurfacesByRoom:
-SELECT * FROM surfaces WHERE room_id = ?;
+SELECT s.*, r.door_wall FROM surfaces s
+JOIN rooms r ON r.id = s.room_id
+WHERE s.room_id = ?;
 
 getSurfaceById:
 SELECT * FROM surfaces WHERE id = ?;

@@ -88,6 +88,8 @@ private struct AddRoomSheet: View {
     @State private var width: Double = 3000
     @State private var depth: Double = 4000
     @State private var height: Double = 2400
+    // Door defaults to Front (z=0) unless the user taps another edge or "None".
+    @State private var doorWall: Double? = 0.0
 
     private let roomRepo: RoomRepository
     private let typeId = TypeId()
@@ -128,6 +130,20 @@ private struct AddRoomSheet: View {
                             .multilineTextAlignment(.trailing)
                     }
                 }
+
+                Section("Door wall") {
+                    DoorDiagramView(
+                        roomWidth: width,
+                        roomDepth: depth,
+                        selectedWall: doorWall,
+                        onWallSelected: { doorWall = $0 }
+                    )
+                    .frame(height: 180)
+
+                    Button("None") { doorWall = nil }
+                        .font(.caption)
+                        .frame(maxWidth: .infinity)
+                }
             }
             .navigationTitle("New Room")
             .navigationBarTitleDisplayMode(.inline)
@@ -147,7 +163,11 @@ private struct AddRoomSheet: View {
                                     ? "Room" : name.trimmingCharacters(in: .whitespacesAndNewlines),
                                 width: width,
                                 depth: depth,
-                                height: height
+                                height: height,
+                                doorWall: doorWall.map { KotlinDouble(double: $0) },
+                                doorWidth: 900,
+                                doorHeight: 2100,
+                                doorOffset: nil
                             )
                             try? await repo.insert(room: room)
                             onDismiss()
