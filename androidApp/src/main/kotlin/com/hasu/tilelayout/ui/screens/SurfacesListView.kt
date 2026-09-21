@@ -57,6 +57,7 @@ fun SurfacesListView(
     vm: RoomEditorViewModel,
     roomId: String,
     onSurfaceClick: (String) -> Unit,
+    onEditRoom: () -> Unit = {},
 ) {
     val scope = rememberCoroutineScope()
     val surfaceRepo = remember {
@@ -75,21 +76,38 @@ fun SurfacesListView(
 
     Column(modifier = Modifier.fillMaxSize()) {
         room?.let {
+            // Top-down view of the room with dimensions annotated on the
+            // drawing and the door size under the door wall. Tap to edit.
             Text(
-                text = "Room ${it.width.toInt()} × ${it.depth.toInt()} × ${it.height.toInt()} mm",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                "Layout",
+                style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-            DoorCard(
-                room = it,
-                onSave = { doorWall, doorWidth, doorHeight, doorOffset ->
-                    scope.launch {
-                        roomRepo.updateDoor(roomId, doorWall, doorWidth, doorHeight, doorOffset)
-                        room = roomRepo.getById(roomId)
-                        vm.loadSurfaces(roomId)
-                    }
-                },
+            DoorDiagram(
+                roomWidth = it.width,
+                roomDepth = it.depth,
+                selectedWall = it.doorWall,
+                onWallSelected = {},
+                modifier = Modifier.fillMaxWidth().height(240.dp),
+                doorWidth = it.doorWidth,
+                doorOffset = it.doorOffset,
+                centerCaption = "W ${it.width.toInt()} mm\nD ${it.depth.toInt()} mm\nH ${it.height.toInt()} mm",
+                doorCaption = {
+                    val span = if (it.doorWall == 90.0 || it.doorWall == 270.0) it.depth else it.width
+                    val center = (span - it.doorWidth) / 2.0
+                    val offset = it.doorOffset
+                    val centered = offset == null || kotlin.math.abs(offset - center) <= 0.5
+                    "${it.doorWidth.toInt()} × ${it.doorHeight.toInt()} mm" +
+                        if (centered) " (centered)"
+                        else " · offset ${offset.toInt()} mm"
+                }(),
+                onAnyTap = { onEditRoom() },
+            )
+            Text(
+                "Tap to edit",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
             )
         }
         HorizontalDivider()
@@ -234,149 +252,3 @@ private fun GenerateOption(label: String, checked: Boolean, onCheckedChange: (Bo
     }
 }
 
-// ── Door configuration ──
-
-private const val MIN_DOOR_WIDTH = 400.0
-private const val MIN_DOOR_HEIGHT = 1500.0
-
-/** Wall span in mm for a given door wall rotation. */
-private fun wallSpanFor(room: Room, wall: Double?): Double = when (wall) {
-    90.0, 270.0 -> room.depth
-    else -> room.width
-}
-
-/**
- * Door configuration card: diagram wall picker, width/height/offset fields,
- * inline validation, and a Save button gated on dirty & valid state.
- */
-@Composable
-private fun DoorCard(
-    room: Room,
-    onSave: (doorWall: Double?, doorWidth: Double, doorHeight: Double, doorOffset: Double?) -> Unit,
-) {
-    var selectedWall by remember(room) { mutableStateOf(room.doorWall) }
-    var widthText by remember(room) { mutableStateOf(room.doorWidth.toInt().toString()) }
-    var heightText by remember(room) { mutableStateOf(room.doorHeight.toInt().toString()) }
-    var offsetText by remember(room) { mutableStateOf(room.doorOffset?.toInt()?.toString() ?: "") }
-    var offsetTouched by remember(room) { mutableStateOf(room.doorOffset != null) }
-
-    val wallSpan = wallSpanFor(room, selectedWall)
-    val width = widthText.toDoubleOrNull() ?: 0.0
-    val height = heightText.toDoubleOrNull() ?: 0.0
-    val offset = offsetText.toDoubleOrNull()
-
-    val widthError = width < MIN_DOOR_WIDTH || width > wallSpan
-    val heightError = height < MIN_DOOR_HEIGHT || height > room.height
-    val offsetError =
-        offsetTouched && !offsetText.isBlank() && offset != null && (offset < 0.0 || offset > wallSpan - width)
-    val valid = !widthError && !heightError && !offsetError
-
-    val centeredOffset = ((wallSpan - width) / 2.0).coerceAtLeast(0.0)
-
-    val dirty = selectedWall != room.doorWall ||
-        abs(width - room.doorWidth) > 0.01 ||
-        abs(height - room.doorHeight) > 0.01 ||
-        offset != room.doorOffset
-
-    // No wall selected (clearing the door) needs no field validity.
-    val canSave = if (selectedWall == null) dirty else dirty && valid
-
-    OutlinedCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("🚪", fontSize = 18.sp)
-                Text(" Door", style = MaterialTheme.typography.titleMedium)
-            }
-
-            DoorDiagram(
-                roomWidth = room.width,
-                roomDepth = room.depth,
-                selectedWall = selectedWall,
-                onWallSelected = { wall ->
-                    selectedWall = wall
-                    // Auto-fill the centered offset for the new wall
-                    offsetText = (((wallSpanFor(room, wall) - width) / 2.0).coerceAtLeast(0.0)).toInt().toString()
-                    offsetTouched = false
-                },
-                modifier = Modifier.fillMaxWidth().height(180.dp),
-            )
-
-            TextButton(
-                onClick = { selectedWall = null },
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            ) {
-                Text("None")
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = widthText,
-                    onValueChange = { widthText = it },
-                    label = { Text("Width (mm)") },
-                    singleLine = true,
-                    enabled = selectedWall != null,
-                    isError = selectedWall != null && widthError,
-                    supportingText = {
-                        if (selectedWall != null && widthError) {
-                            Text("Door width must be ${MIN_DOOR_WIDTH.toInt()}–${wallSpan.toInt()} mm")
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                )
-                OutlinedTextField(
-                    value = heightText,
-                    onValueChange = { heightText = it },
-                    label = { Text("Height (mm)") },
-                    singleLine = true,
-                    enabled = selectedWall != null,
-                    isError = selectedWall != null && heightError,
-                    supportingText = {
-                        if (selectedWall != null && heightError) {
-                            Text("Door height must be ${MIN_DOOR_HEIGHT.toInt()}–${room.height.toInt()} mm")
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.weight(1f),
-                )
-            }
-
-            OutlinedTextField(
-                value = offsetText,
-                onValueChange = {
-                    offsetText = it
-                    offsetTouched = true
-                },
-                label = { Text("Offset from wall corner (mm)") },
-                singleLine = true,
-                enabled = selectedWall != null,
-                isError = offsetError,
-                supportingText = {
-                    when {
-                        offsetError ->
-                            Text("Offset must be 0–${(wallSpan - width).toInt()} mm")
-                        selectedWall != null && !offsetTouched ->
-                            Text("Auto-centered on wall selection (${centeredOffset.toInt()} mm)")
-                    }
-                },
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                modifier = Modifier.fillMaxWidth(),
-            )
-
-            Button(
-                onClick = {
-                    onSave(selectedWall, width, height, offset)
-                },
-                enabled = canSave,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .semantics { contentDescription = "Save Door" },
-            ) {
-                Text("Save Door")
-            }
-        }
-    }
-}

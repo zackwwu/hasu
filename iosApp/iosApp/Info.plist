@@ -8,5 +8,7 @@
 	<string>Scan tile textures with the camera.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Save tile layout and preview exports to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pick photos to use as tile textures.</string>
 </dict>
 </plist>

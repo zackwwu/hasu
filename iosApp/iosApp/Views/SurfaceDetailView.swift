@@ -1,6 +1,9 @@
 import SwiftUI
 import SharedLogic
 
+/// Kotlin models don't bridge Identifiable — add it for sheet(item:).
+extension SurfaceTileGroup: Identifiable {}
+
 /// Detailed view for a single surface: grout settings, tile group assignments,
 /// and region editor access.
 struct SurfaceDetailView: View {
@@ -10,11 +13,13 @@ struct SurfaceDetailView: View {
     @State private var selectedGroutColor: GroutColor
     @State private var groutWidth: Double
 
-    @State private var showRegionEditor = false
     @State private var selectedSTG: SurfaceTileGroup? = nil
 
     @State private var stgs: [SurfaceTileGroup] = []
     @State private var tileGroups: [TileGroup] = []
+
+    @State private var showTileGroupPicker = false
+    @State private var availableTileGroups: [TileGroup] = []
 
     private let surfaceRepo: SurfaceRepository
     private let tileGroupRepo: TileGroupRepository
@@ -48,10 +53,11 @@ struct SurfaceDetailView: View {
         .onChange(of: groutWidth) { _, _ in
             Task { await updateGrout() }
         }
-        .sheet(isPresented: $showRegionEditor) {
-            if let stg = selectedSTG {
-                RegionEditorView(stg: stg, surface: surface)
-            }
+        .sheet(item: $selectedSTG) { stg in
+            RegionEditorView(stg: stg, surface: surface)
+        }
+        .sheet(isPresented: $showTileGroupPicker) {
+            tileGroupPicker
         }
     }
 
@@ -64,12 +70,6 @@ struct SurfaceDetailView: View {
             }
             LabeledContent("Dimensions") {
                 Text("\(Int(surface.width)) × \(Int(surface.height)) mm")
-            }
-            LabeledContent("Position") {
-                Text("(\(Int(surface.position.x)), \(Int(surface.position.y)), \(Int(surface.position.z)))")
-            }
-            LabeledContent("Rotation") {
-                Text("\(Int(surface.position.rotation))°")
             }
         }
     }
@@ -113,7 +113,7 @@ struct SurfaceDetailView: View {
                         .foregroundStyle(.secondary)
                     Spacer()
                     Button("Add") {
-                        Task { await addDefaultSTG() }
+                        Task { await openTileGroupPicker() }
                     }
                 }
             } else {
@@ -121,7 +121,6 @@ struct SurfaceDetailView: View {
                     STGRow(stg: stg, tileGroups: tileGroups)
                         .onTapGesture {
                             selectedSTG = stg
-                            showRegionEditor = true
                         }
                 }
                 .onDelete { indexSet in
@@ -139,7 +138,7 @@ struct SurfaceDetailView: View {
                 }
 
                 Button {
-                    Task { await addDefaultSTG() }
+                    Task { await openTileGroupPicker() }
                 } label: {
                     Label("Add Tile Group", systemImage: "plus")
                 }
@@ -148,6 +147,56 @@ struct SurfaceDetailView: View {
             Text("Tile Groups")
         } footer: {
             Text("Each tile group controls pattern, offset, and region for one type of tile on this surface.")
+        }
+    }
+
+    /// Picker listing every tile group in the project — the user chooses which
+    /// tile this surface region uses instead of silently getting the first one.
+    private var tileGroupPicker: some View {
+        NavigationStack {
+            List {
+                if availableTileGroups.isEmpty {
+                    ContentUnavailableView(
+                        "No Tiles",
+                        systemImage: "square.grid.3x3",
+                        description: Text("Add a tile in the Tile Library first.")
+                    )
+                } else {
+                    ForEach(availableTileGroups, id: \.id) { tg in
+                        Button {
+                            Task { await addSTG(tileGroupId: tg.id) }
+                            showTileGroupPicker = false
+                        } label: {
+                            HStack(spacing: 12) {
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.blue.opacity(0.2))
+                                    .frame(width: 36, height: 36)
+                                    .overlay {
+                                        Image(systemName: "square.grid.3x3")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.blue)
+                                    }
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(tg.name)
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                    Text("\(Int(tg.tileWidth)) × \(Int(tg.tileHeight)) mm")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+            .navigationTitle("Choose Tile")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { showTileGroupPicker = false }
+                }
+            }
         }
     }
 
@@ -172,14 +221,13 @@ struct SurfaceDetailView: View {
         }
     }
 
-    private func addDefaultSTG() async {
-        guard let room = try? await roomRepo.getById(id: surface.roomId),
-              let projectTileGroups = try? await tileGroupRepo.getByProject(projectId: room.projectId),
-              let firstTG = projectTileGroups.first
-        else {
-            return
-        }
+    private func openTileGroupPicker() async {
+        guard let room = try? await roomRepo.getById(id: surface.roomId) else { return }
+        availableTileGroups = (try? await tileGroupRepo.getByProject(projectId: room.projectId)) ?? []
+        showTileGroupPicker = true
+    }
 
+    private func addSTG(tileGroupId: String) async {
         let region = RegionRect(
             x: 0, y: 0,
             width: surface.width,
@@ -189,7 +237,7 @@ struct SurfaceDetailView: View {
         let stg = SurfaceTileGroup(
             id: tid.generate(prefix: "stg"),
             surfaceId: surface.id,
-            tileGroupId: firstTG.id,
+            tileGroupId: tileGroupId,
             region: region,
             pattern: TilePattern.grid,
             offsetX: 0,

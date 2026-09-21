@@ -37,7 +37,7 @@ import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
 import kotlinx.coroutines.launch
 
 @Composable
-fun LayoutTab(vm: RoomEditorViewModel) {
+fun LayoutTab(vm: RoomEditorViewModel, onOpenSurfaces: () -> Unit = {}) {
     val surfaces by vm.surfaces.collectAsState()
     val selectedId by vm.selectedSurfaceId.collectAsState()
     val lockedIds by vm.lockedSurfaceIds.collectAsState()
@@ -86,38 +86,66 @@ fun LayoutTab(vm: RoomEditorViewModel) {
             }
         } else {
             val scale = 0.25f // mm → px scale
-            Canvas(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth()
-                    .pointerInput(Unit) {
-                        detectDragGestures(
-                            onDragStart = {
-                                scope.launch { vm.onDragStart() }
-                            },
-                            onDragEnd = {
-                                val dx = (dragAccumulator.x / scale).toDouble()
-                                val dy = (dragAccumulator.y / scale).toDouble()
-                                scope.launch { vm.onDragEnd(dx, dy) }
-                                dragAccumulator = Offset.Zero
-                            },
-                            onDragCancel = {
-                                dragAccumulator = Offset.Zero
-                            },
-                            onDrag = { change, dragAmount ->
-                                change.consume()
-                                dragAccumulator += dragAmount
-                            }
+            if (currentTiles.isEmpty()) {
+                // A surface is selected but has no tiles — give the user a way
+                // forward instead of a silent blank canvas.
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "No tiles on this surface",
+                            style = MaterialTheme.typography.titleMedium,
                         )
+                        Text(
+                            "Assign a tile group from the Surfaces tab to see the layout here.",
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        OutlinedButton(onClick = onOpenSurfaces) {
+                            Text("Add Tile Group")
+                        }
                     }
-            ) {
-                drawTiles(
-                    tiles = currentTiles,
-                    groutColor = groutColor,
-                    groutWidth = groutWidth,
-                    scale = scale,
-                    doorRect = doorLocalRects[selectedId],
-                )
+                }
+            } else {
+                Canvas(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                        .pointerInput(Unit) {
+                            detectDragGestures(
+                                onDragStart = {
+                                    scope.launch { vm.onDragStart() }
+                                },
+                                onDragEnd = {
+                                    val dx = (dragAccumulator.x / scale).toDouble()
+                                    val dy = (dragAccumulator.y / scale).toDouble()
+                                    scope.launch { vm.onDragEnd(dx, dy) }
+                                    dragAccumulator = Offset.Zero
+                                },
+                                onDragCancel = {
+                                    dragAccumulator = Offset.Zero
+                                },
+                                onDrag = { change, dragAmount ->
+                                    change.consume()
+                                    dragAccumulator += dragAmount
+                                }
+                            )
+                        }
+                ) {
+                    drawTiles(
+                        tiles = currentTiles,
+                        groutColor = groutColor,
+                        groutWidth = groutWidth,
+                        scale = scale,
+                        doorRect = doorLocalRects[selectedId],
+                    )
+                }
             }
         }
 

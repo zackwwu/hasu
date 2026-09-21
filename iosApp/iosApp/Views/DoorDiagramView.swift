@@ -4,23 +4,42 @@ import SharedLogic
 /// Mini top-down room diagram for the door wall picker. The room rectangle is
 /// drawn centered and aspect-preserved; taps hit-test through the shared
 /// `DoorPickerGeometry.wallAtTap` (inside the rectangle, near an edge).
+/// The door is drawn as an engineering-style swing door (leaf + arc).
 struct DoorDiagramView: View {
     let roomWidth: Double
     let roomDepth: Double
     let selectedWall: Double?
     let onWallSelected: (Double) -> Void
+    var doorWidth: Double = 900
+    var doorOffset: Double? = nil
+    /// Drawn centered inside the room rectangle (e.g. dimensions).
+    var centerCaption: String? = nil
+    /// Appended under the door wall's name label (e.g. door size + offset).
+    var doorCaption: String? = nil
+    /// When set, ANY tap on the diagram fires this instead of wall picking
+    /// (read-only mode for the Surfaces tab).
+    var onAnyTap: (() -> Void)? = nil
 
     var body: some View {
         GeometryReader { geo in
             let size = geo.size
             let safeWidth = max(roomWidth, 1)
             let safeDepth = max(roomDepth, 1)
-            let scale = min(size.width / safeWidth, size.height / safeDepth)
+            // Reserve space OUTSIDE the room box for the wall labels — and the
+            // door caption stacked under the door wall's label — so they never
+            // clip at the view edges or sit inside the room.
+            let isSideDoor = (selectedWall == 90 || selectedWall == 270)
+            let sideInset: CGFloat = isSideDoor ? 130 : 60
+            let topInset: CGFloat = 22
+            let bottomInset: CGFloat = 46
+            let availW = max(size.width - sideInset * 2, 40)
+            let availH = max(size.height - topInset - bottomInset, 40)
+            let scale = min(availW / safeWidth, availH / safeDepth)
             let rectW = roomWidth * scale
             let rectH = roomDepth * scale
             let rect = CGRect(
                 x: (size.width - rectW) / 2,
-                y: (size.height - rectH) / 2,
+                y: topInset + (availH - rectH) / 2,
                 width: rectW,
                 height: rectH
             )
@@ -29,37 +48,123 @@ struct DoorDiagramView: View {
                 Rectangle()
                     .stroke(diagramEdgeColor, lineWidth: 2)
                     .frame(width: rectW, height: rectH)
+                    .position(x: rect.midX, y: rect.midY)
 
-                selectedEdgeIndicator(rect: rect, rectW: rectW, rectH: rectH)
+                // Wall names are door-relative, so they only exist once the user
+                // has actually specified a door wall — and they follow the door:
+                // Door Wall / Left Wall / Front Wall / Right Wall (matches
+                // Surface.displayName() so the diagram and surfaces list agree).
+                // Labels are anchored to the ROOM RECTANGLE (not the view edges)
+                // so they never drift away from the walls. The door wall's label
+                // stacks its caption underneath, fully outside the box.
+                if selectedWall != nil {
+                    selectedEdgeIndicator(rect: rect, rectW: rectW, rectH: rectH)
 
-                VStack {
-                    Text("Back").font(.caption2).foregroundStyle(diagramEdgeColor).padding(.top, 2)
-                    Spacer()
-                    Text("Front").font(.caption2).foregroundStyle(diagramEdgeColor).padding(.bottom, 2)
+                    edgeLabel(edge: 180, rect: rect, size: size)
+                    edgeLabel(edge: 0, rect: rect, size: size)
+                    edgeLabel(edge: 90, rect: rect, size: size)
+                    edgeLabel(edge: 270, rect: rect, size: size)
                 }
-                HStack {
-                    Text("Left").font(.caption2).foregroundStyle(diagramEdgeColor).padding(.leading, 2)
-                    Spacer()
-                    Text("Right").font(.caption2).foregroundStyle(diagramEdgeColor).padding(.trailing, 2)
+
+                // Centered annotation inside the room (e.g. dimensions).
+                if let centerCaption {
+                    Text(centerCaption)
+                        .font(.caption2)
+                        .fontWeight(.medium)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                        .position(x: rect.midX, y: rect.midY)
                 }
             }
             .frame(width: size.width, height: size.height)
             .contentShape(Rectangle())
             .accessibilityIdentifier("door-diagram")
             .onTapGesture { location in
+                if let onAnyTap {
+                    onAnyTap()
+                    return
+                }
                 let wall = DoorPickerGeometry().wallAtTap(
                     x: Double(location.x),
-                    y: Double(location.y),
+                    y: Double(location.y - topInset),
                     diagramW: Double(size.width),
-                    diagramH: Double(size.height),
+                    diagramH: Double(availH),
                     roomWidth: roomWidth,
                     roomDepth: roomDepth,
-                    edgeMarginFraction: 0.15
+                    edgeMarginFraction: 0.28,
+                    outsideTolerance: 12
                 )
                 if let wall = wall {
                     onWallSelected(wall.doubleValue)
                 }
             }
+        }
+    }
+
+    /// Door-relative name for a diagram edge, mirroring `Surface.displayName()`:
+    /// delta 0 → Door Wall, 90 → Left Wall, 180 → Front Wall, 270 → Right Wall.
+    private func doorRelativeName(edge: Double) -> String {
+        guard let door = selectedWall else { return "" }
+        let delta = ((Int(edge) - Int(door)) % 360 + 360) % 360
+        switch delta {
+        case 0: return "Door Wall"
+        case 90: return "Left Wall"
+        case 180: return "Front Wall"
+        case 270: return "Right Wall"
+        default: return ""
+        }
+    }
+
+    /// Wall name (plus the door caption stacked underneath when this edge is the
+    /// door wall).
+    @ViewBuilder
+    private func edgeLabelContent(edge: Double) -> some View {
+        if edge == selectedWall, let doorCaption, !doorCaption.isEmpty {
+            VStack(spacing: 2) {
+                Text(doorRelativeName(edge: edge))
+                Text(doorCaption).foregroundStyle(Color.blue)
+            }
+        } else {
+            Text(doorRelativeName(edge: edge))
+        }
+    }
+
+    /// Position an edge label OUTSIDE the room rectangle, anchored to the rect
+    /// (not the view edges). Door-wall labels get extra clearance for the stacked
+    /// caption. Labels never render inside the box.
+    @ViewBuilder
+    private func edgeLabel(edge: Double, rect: CGRect, size: CGSize) -> some View {
+        let isDoor = (edge == selectedWall)
+
+        switch edge {
+        case 180: // Top wall: label + caption above the box.
+            edgeLabelContent(edge: edge)
+                .font(.caption2)
+                .foregroundStyle(diagramEdgeColor)
+                .multilineTextAlignment(.center)
+                .position(x: rect.midX, y: rect.minY - (isDoor ? 34 : 14))
+        case 0: // Bottom wall: label + caption below the box.
+            edgeLabelContent(edge: edge)
+                .font(.caption2)
+                .foregroundStyle(diagramEdgeColor)
+                .multilineTextAlignment(.center)
+                .position(x: rect.midX, y: rect.maxY + (isDoor ? 34 : 14))
+        case 90: // Left wall: label left of the box, caption under the name.
+            edgeLabelContent(edge: edge)
+                .font(.caption2)
+                .foregroundStyle(diagramEdgeColor)
+                .multilineTextAlignment(.center)
+                .frame(width: 110, alignment: .trailing)
+                .position(x: rect.minX - 59, y: rect.midY + (isDoor ? 18 : 0))
+        case 270: // Right wall: mirrored.
+            edgeLabelContent(edge: edge)
+                .font(.caption2)
+                .foregroundStyle(diagramEdgeColor)
+                .multilineTextAlignment(.center)
+                .frame(width: 110, alignment: .leading)
+                .position(x: rect.maxX + 59, y: rect.midY + (isDoor ? 18 : 0))
+        default:
+            EmptyView()
         }
     }
 

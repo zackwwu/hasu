@@ -17,6 +17,22 @@ struct RegionEditorView: View {
 
     private let surfaceRepo: SurfaceRepository
 
+    private var regionXText: Binding<String> {
+        Binding(get: { String(Int(regionX)) }, set: { regionX = Double($0) ?? regionX })
+    }
+
+    private var regionYText: Binding<String> {
+        Binding(get: { String(Int(regionY)) }, set: { regionY = Double($0) ?? regionY })
+    }
+
+    private var regionWText: Binding<String> {
+        Binding(get: { String(Int(regionW)) }, set: { regionW = Double($0) ?? regionW })
+    }
+
+    private var regionHText: Binding<String> {
+        Binding(get: { String(Int(regionH)) }, set: { regionH = Double($0) ?? regionH })
+    }
+
     init(stg: SurfaceTileGroup, surface: Surface) {
         self.stg = stg
         self.surface = surface
@@ -32,29 +48,17 @@ struct RegionEditorView: View {
         NavigationStack {
             Form {
                 Section {
-                    HStack {
-                        LabeledContent("X") {
-                            TextField("X", value: $regionX, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        LabeledContent("Y") {
-                            TextField("Y", value: $regionY, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                        }
+                    HStack(spacing: 12) {
+                        TappableDimensionRow(label: "X", text: regionXText)
+                            .frame(maxWidth: .infinity)
+                        TappableDimensionRow(label: "Y", text: regionYText)
+                            .frame(maxWidth: .infinity)
                     }
-                    HStack {
-                        LabeledContent("Width") {
-                            TextField("W", value: $regionW, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                        }
-                        LabeledContent("Height") {
-                            TextField("H", value: $regionH, format: .number)
-                                .keyboardType(.decimalPad)
-                                .multilineTextAlignment(.trailing)
-                        }
+                    HStack(spacing: 12) {
+                        TappableDimensionRow(label: "Width", text: regionWText)
+                            .frame(maxWidth: .infinity)
+                        TappableDimensionRow(label: "Height", text: regionHText)
+                            .frame(maxWidth: .infinity)
                     }
                 } header: {
                     Text("Region Bounds (mm)")
@@ -81,6 +85,8 @@ struct RegionEditorView: View {
             }
             .navigationTitle("Edit Region")
             .navigationBarTitleDisplayMode(.inline)
+            .scrollDismissesKeyboard(.interactively)
+            .dismissKeyboardOnTap()
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }

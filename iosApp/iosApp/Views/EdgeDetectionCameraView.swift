@@ -11,6 +11,7 @@ struct EdgeDetectionCameraView: View {
     @Environment(\.dismiss) private var dismiss
     @StateObject private var model = EdgeDetectionModel()
     @State private var showCornerReview = false
+    @State private var autoCaptureTask: Task<Void, Never>?
 
     var body: some View {
         GeometryReader { geo in
@@ -18,20 +19,16 @@ struct EdgeDetectionCameraView: View {
                 EdgeDetectionPreview(session: model.session)
                     .ignoresSafeArea()
 
-                // Guide frame at the tile's aspect ratio — drawn UNDER the detection
-                // overlay so a live detection visually wins when there is one.
+                // Guide frame at the tile's aspect ratio — the aiming UI.
+                // The dim-with-cutout detection overlay is intentionally NOT
+                // drawn: on bright tiles the un-dimmed cutout reads as a
+                // flashing white area. The dashed guide frame + corner review
+                // are the precision path.
                 ScanGuideOverlay(
                     tileWidth: tileGroup.tileWidth,
                     tileHeight: tileGroup.tileHeight
                 )
                 .allowsHitTesting(false)
-
-                // Semi-transparent overlay with rectangle cutout
-                if let rect = model.detectedRect {
-                    EdgeOverlayShape(detectedRect: rect)
-                        .fill(Color.black.opacity(0.4), style: FillStyle(eoFill: true))
-                        .allowsHitTesting(false)
-                }
 
                 VStack {
                     HStack {
@@ -75,8 +72,26 @@ struct EdgeDetectionCameraView: View {
                 model.start()
                 model.viewSize = geo.size
             }
-            .onDisappear { model.stop() }
+            .onDisappear {
+                autoCaptureTask?.cancel()
+                model.stop()
+            }
             .onChange(of: geo.size) { _, newSize in model.viewSize = newSize }
+            .onChange(of: model.isStable) { _, stable in
+                // Auto-capture: once the detection holds steady for a beat,
+                // freeze the frame and open the corner review — the same path
+                // as tapping the shutter. Cancelled the moment it wobbles.
+                autoCaptureTask?.cancel()
+                autoCaptureTask = nil
+                if stable {
+                    autoCaptureTask = Task {
+                        try? await Task.sleep(for: .seconds(1.2))
+                        guard !Task.isCancelled, model.isStable else { return }
+                        model.pause()
+                        showCornerReview = true
+                    }
+                }
+            }
         }
         .fullScreenCover(isPresented: $showCornerReview) {
             CornerReviewView(

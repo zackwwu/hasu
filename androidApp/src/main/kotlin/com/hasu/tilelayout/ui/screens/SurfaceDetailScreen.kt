@@ -220,8 +220,6 @@ private fun SurfaceInfoCard(surface: Surface) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             InfoRow("Type", if (surface.type == SurfaceType.WALL) "Wall" else "Floor")
             InfoRow("Dimensions", "${surface.width.toInt()} × ${surface.height.toInt()} mm")
-            InfoRow("Position", "(x ${surface.position.x.toInt()}, y ${surface.position.y.toInt()}, z ${surface.position.z.toInt()})")
-            InfoRow("Rotation", "${surface.position.rotation.toInt()}°")
         }
     }
 }

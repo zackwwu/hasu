@@ -5,15 +5,17 @@ import SharedLogic
 struct SurfacesListView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
     let roomId: String
+    var onEditRoom: () -> Void = {}
 
     @State private var room: Room? = nil
 
     private let db: TileLayoutDb
     private let roomRepo: RoomRepository
 
-    init(vm: IOSRoomEditorViewModel, roomId: String) {
+    init(vm: IOSRoomEditorViewModel, roomId: String, onEditRoom: @escaping () -> Void = {}) {
         self.vm = vm
         self.roomId = roomId
+        self.onEditRoom = onEditRoom
         let database = DatabaseProvider.shared.createTileLayoutDb()
         self.db = database
         self.roomRepo = SqlDelightRoomRepository(queries: database.tileLayoutDbQueries)
@@ -22,23 +24,25 @@ struct SurfacesListView: View {
     var body: some View {
         List {
             if let room {
-                Section("Room") {
-                    HStack {
-                        Text(room.name)
-                            .font(.headline)
-                        Spacer()
-                        Text("\(Int(room.width)) × \(Int(room.depth)) × \(Int(room.height)) mm")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Section("Door") {
-                    DoorSectionView(room: room, roomRepo: roomRepo) {
-                        await loadRoomInfo()
-                        await vm.load(roomId: roomId)
-                    }
-                    .id(doorSectionId(room))
+                // Top-down view of the room with dimensions annotated on the
+                // drawing and the door size under the door wall. Tap to edit.
+                Section {
+                    DoorDiagramView(
+                        roomWidth: room.width,
+                        roomDepth: room.depth,
+                        selectedWall: room.doorWall?.doubleValue,
+                        onWallSelected: { _ in },
+                        doorWidth: room.doorWidth,
+                        doorOffset: room.doorOffset?.doubleValue,
+                        centerCaption: "W \(Int(room.width)) mm\nD \(Int(room.depth)) mm\nH \(Int(room.height)) mm",
+                        doorCaption: doorSummary(room),
+                        onAnyTap: { onEditRoom() }
+                    )
+                    .frame(height: 260)
+                } header: {
+                    Text("Layout")
+                } footer: {
+                    Text("Tap to edit.")
                 }
 
                 if vm.surfaces.isEmpty {
@@ -85,10 +89,18 @@ struct SurfacesListView: View {
         }
     }
 
-    /// Re-initializes the door section's editing state whenever the persisted
-    /// door values change (after a save), resetting the dirty flag.
-    private func doorSectionId(_ room: Room) -> String {
-        "\(room.id)-\(room.doorWall?.doubleValue ?? -1)-\(room.doorWidth)-\(room.doorHeight)-\(room.doorOffset?.doubleValue ?? -1)"
+    /// Door summary line: size + offset — or "(centered)" when the door is
+    /// centered, whether the offset was left unset or manually entered with
+    /// the centered value.
+    private func doorSummary(_ room: Room) -> String {
+        let size = "\(Int(room.doorWidth)) × \(Int(room.doorHeight)) mm"
+        let span = (room.doorWall?.doubleValue == 90 || room.doorWall?.doubleValue == 270)
+            ? room.depth : room.width
+        let center = (span - room.doorWidth) / 2
+        if let offset = room.doorOffset, abs(offset.doubleValue - center) > 0.5 {
+            return "\(size) · offset \(Int(offset.doubleValue)) mm"
+        }
+        return "\(size) (centered)"
     }
 
     // MARK: - Surface Generation

@@ -7,6 +7,8 @@ struct LayoutTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
     @GestureState private var dragOffset = CGSize.zero
     @State private var showExportSheet = false
+    /// Switches the Room Editor back to the Surfaces tab (assign a tile group).
+    var onOpenSurfaces: () -> Void = {}
 
     private let scaleFactor: Double = 1.0  // Points per mm — adjust for zoom
 
@@ -82,12 +84,28 @@ struct LayoutTabView: View {
     private var canvasView: some View {
         GeometryReader { geometry in
             if vm.currentTiles.isEmpty {
-                ContentUnavailableView(
-                    "No Layout",
-                    systemImage: "square.grid.3x3",
-                    description: Text("Select a surface to view its tile layout.")
-                )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                if vm.selectedSurfaceId == nil {
+                    ContentUnavailableView(
+                        "No Layout",
+                        systemImage: "square.grid.3x3",
+                        description: Text("Select a surface to view its tile layout.")
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // A surface is selected but has no tiles — give the user a
+                    // way forward instead of a silent blank canvas.
+                    ContentUnavailableView {
+                        Label("No Tiles on This Surface", systemImage: "square.dashed")
+                    } description: {
+                        Text("Assign a tile group from the Surfaces tab to see the layout here.")
+                    } actions: {
+                        Button("Add Tile Group") {
+                            onOpenSurfaces()
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             } else {
                 Canvas { context, size in
                     SurfaceCanvas.drawTiles(

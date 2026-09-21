@@ -60,9 +60,11 @@ import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.hypot
 import kotlin.math.max
+import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -100,6 +102,24 @@ fun EdgeDetectionScreen(
     var stableCount by remember { mutableIntStateOf(0) }
     var lastCorners by remember { mutableStateOf<QuadCorners?>(null) }
     val stableFrameThreshold = 10  // ~330ms at 30fps
+
+    // Overlay smoothing: EMA over corner points + hold-on-miss so the quad
+    // tracks instead of vibrating when the detector flickers.
+    var smoothedCorners by remember { mutableStateOf<QuadCorners?>(null) }
+    var missedFrames by remember { mutableIntStateOf(0) }
+    val smoothingAlpha = 0.35f
+
+    // Auto-capture: once the detection holds steady for a beat, freeze the
+    // frame and open the corner review — same path as tapping Capture.
+    LaunchedEffect(isStable) {
+        if (isStable) {
+            delay(1200)
+            if (isStable) {
+                paused = true
+                showCornerReview = true
+            }
+        }
+    }
 
     var permissionGranted by remember {
         mutableStateOf(
@@ -190,19 +210,41 @@ fun EdgeDetectionScreen(
                                 // work when detection finds nothing.
                                 capturedBitmap = bitmap
                                 if (corners != null) {
-                                    if (lastCorners != null && cornersClose(lastCorners!!, corners)) {
+                                    val tolerance = max(15f, min(bitmap.width, bitmap.height) * 0.03f)
+                                    if (lastCorners != null && cornersClose(lastCorners!!, corners, tolerance)) {
                                         stableCount++
-                                        isStable = stableCount >= stableFrameThreshold
                                     } else {
-                                        stableCount = 0
-                                        isStable = false
+                                        // Decay rather than reset — tiny hand
+                                        // movements stay "steady".
+                                        stableCount = max(0, stableCount - 4)
                                     }
+                                    isStable = stableCount >= stableFrameThreshold
                                     lastCorners = corners
-                                    detectedCorners = corners
+                                    // EMA-smooth the published quad so the overlay tracks
+                                    // instead of jumping per frame.
+                                    val smoothed = smoothedCorners?.let { s ->
+                                        QuadCorners(
+                                            tl = PointF(lerp(s.tl.x, corners.tl.x, smoothingAlpha), lerp(s.tl.y, corners.tl.y, smoothingAlpha)),
+                                            tr = PointF(lerp(s.tr.x, corners.tr.x, smoothingAlpha), lerp(s.tr.y, corners.tr.y, smoothingAlpha)),
+                                            br = PointF(lerp(s.br.x, corners.br.x, smoothingAlpha), lerp(s.br.y, corners.br.y, smoothingAlpha)),
+                                            bl = PointF(lerp(s.bl.x, corners.bl.x, smoothingAlpha), lerp(s.bl.y, corners.bl.y, smoothingAlpha)),
+                                        )
+                                    } ?: corners
+                                    smoothedCorners = smoothed
+                                    missedFrames = 0
+                                    detectedCorners = smoothed
                                 } else {
-                                    stableCount = 0
-                                    isStable = false
-                                    detectedCorners = null
+                                    // Decay stability instead of hard-resetting on
+                                    // a brief missed detection.
+                                    stableCount = max(0, stableCount - 4)
+                                    isStable = stableCount >= stableFrameThreshold
+                                    // Hold the last quad briefly so a single missed
+                                    // frame doesn't make the overlay blink.
+                                    missedFrames++
+                                    if (missedFrames >= 4) {
+                                        detectedCorners = null
+                                        smoothedCorners = null
+                                    }
                                 }
                             }
                             provider.bindToLifecycle(
@@ -392,8 +434,10 @@ private fun BoxScope.CaptureControls(
     }
 }
 
-private fun cornersClose(a: QuadCorners, b: QuadCorners): Boolean {
+private fun cornersClose(a: QuadCorners, b: QuadCorners, tolerance: Float): Boolean {
     fun dist(p1: PointF, p2: PointF) = hypot((p1.x - p2.x).toDouble(), (p1.y - p2.y).toDouble())
-    return dist(a.tl, b.tl) < 15 && dist(a.tr, b.tr) < 15 &&
-           dist(a.bl, b.bl) < 15 && dist(a.br, b.br) < 15
+    return dist(a.tl, b.tl) < tolerance && dist(a.tr, b.tr) < tolerance &&
+           dist(a.bl, b.bl) < tolerance && dist(a.br, b.br) < tolerance
 }
+
+private fun lerp(from: Float, to: Float, alpha: Float): Float = from + (to - from) * alpha
