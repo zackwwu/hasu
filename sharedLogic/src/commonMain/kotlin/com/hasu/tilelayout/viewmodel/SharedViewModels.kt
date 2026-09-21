@@ -156,6 +156,12 @@ class RoomEditorViewModel(
         _selectedSurfaceId.value = id
         if (id != null) {
             loadLayoutForSurface(id)
+            // Selecting a surface with no cached layout result (e.g. a wall that
+            // never had its layout computed) should compute it on the spot when
+            // it has tile groups — otherwise the layout tab silently shows nothing.
+            if (_currentTiles.value.isEmpty() && surfaceRepo.getSTGsBySurface(id).isNotEmpty()) {
+                computeLayout(id)
+            }
         } else {
             _currentTiles.value = emptyList()
         }

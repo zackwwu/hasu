@@ -43,8 +43,23 @@ class DoorPickerGeometryTest {
     fun paddingMarginOutsideRectReturnsNull() {
         // Outside the room rectangle (left padding strip) → no wall
         assertNull(hit(5.0, 100.0))
-        // Outside below the front edge → no wall
-        assertNull(hit(100.0, 205.0))
+        // Far outside below the front edge (beyond the tolerance zone) → no wall
+        assertNull(hit(100.0, 220.0))
+    }
+
+    @Test
+    fun justOutsideEdgeWithinToleranceHits() {
+        // 6pt below the front edge (rect bottom = 200) → still the front wall
+        assertEquals(0.0, hit(100.0, 206.0))
+        // 6pt above the back edge (rect top = 0) → back wall
+        assertEquals(180.0, hit(100.0, -6.0))
+    }
+
+    @Test
+    fun expandedEdgeBandHitsWider() {
+        // rect 150×200: old margin was 22.5pt, new is 42pt — a tap 40pt from
+        // the front edge used to miss, now hits.
+        assertEquals(0.0, hit(100.0, 160.0))
     }
 
     @Test
