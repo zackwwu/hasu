@@ -30,6 +30,15 @@ class MeshPart(
 ) {
     val vertexCount: Int get() = positions.size / 3
     val indexCount: Int get() = indices.size
+
+    /** [SceneLighting.shade] per vertex, for renderers that bake lighting into vertex colours. */
+    val vertexShades: FloatArray by lazy {
+        FloatArray(vertexCount) { i ->
+            SceneLighting.shade(
+                normals[i * 3].toDouble(), normals[i * 3 + 1].toDouble(), normals[i * 3 + 2].toDouble(),
+            ).toFloat()
+        }
+    }
 }
 
 /** Everything rendered for one surface; hidden/selected as a unit. */

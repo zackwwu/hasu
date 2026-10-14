@@ -365,11 +365,9 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
     private fun createPart(part: MeshPart, box: Box): GpuPart {
         val vertexCount = part.vertexCount
         val shades = ByteBuffer.allocateDirect(vertexCount * 4).order(ByteOrder.nativeOrder())
+        val vertexShades = part.vertexShades
         for (i in 0 until vertexCount) {
-            val shade = SceneLighting.shade(
-                part.normals[i * 3].toDouble(), part.normals[i * 3 + 1].toDouble(), part.normals[i * 3 + 2].toDouble(),
-            )
-            val b = (shade * 255).roundToInt().coerceIn(0, 255).toByte()
+            val b = (vertexShades[i] * 255).roundToInt().coerceIn(0, 255).toByte()
             shades.put(i * 4, b).put(i * 4 + 1, b).put(i * 4 + 2, b).put(i * 4 + 3, 0xFF.toByte())
         }
 

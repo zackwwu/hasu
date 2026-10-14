@@ -5,8 +5,9 @@ import kotlin.math.max
 /**
  * Fixed world lighting shared by both renderers: an ambient term plus a key
  * light from above-front-right and a weak fill from the opposite side.
- * Android bakes [shade] into vertex colours; iOS configures equivalent
- * ambient + directional lights, so faces shade identically on both.
+ * Both renderers bake [shade] into vertex colours (via
+ * [MeshPart.vertexShades]) and draw unlit, so faces shade identically on
+ * Android and iOS and no per-pixel lighting runs on the GPU.
  * Intensities sum to < 1 so a fully lit face never clips its albedo.
  */
 object SceneLighting {
