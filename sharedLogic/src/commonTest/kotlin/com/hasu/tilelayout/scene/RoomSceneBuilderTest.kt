@@ -60,7 +60,7 @@ class RoomSceneBuilderTest {
         val front = SceneTestFixtures.wall(surfaces, 0.0)
         val scene = RoomSceneBuilder.build(
             surfaces.map { s ->
-                val door = if (s.id == front.id) RegionRect(1050.0, 0.0, 900.0, 2100.0) else null
+                val door = if (s.id == front.id) RegionRect(1050.0, 300.0, 900.0, 2100.0) else null
                 input(s, gridTiles(s.width, s.height), door)
             }
         )
@@ -122,14 +122,45 @@ class RoomSceneBuilderTest {
     @Test
     fun doorIsCutThroughTheWall() {
         val wall = SceneTestFixtures.wall(SceneTestFixtures.room(), 0.0)
-        val door = RegionRect(1050.0, 0.0, 900.0, 2100.0)
+        val door = RegionRect(1050.0, 300.0, 900.0, 2100.0)
         val mesh = RoomSceneBuilder.buildSurface(input(wall, gridTiles(wall.width, wall.height), door))
-        // A ray straight through the door centre, along −Z, must not cross any triangle
+        // A ray straight through the door centre, along −Z, must not cross any triangle.
+        // Layout y runs down from the top of the wall, so the door centre is 1050 mm above the floor.
         val px = (door.x + door.width / 2) / 1000
-        val py = (door.y + door.height / 2) / 1000
+        val py = (ROOM_H - door.y - door.height / 2) / 1000
+        assertEquals(1.05, py, 1e-9)
         for (part in mesh.parts) for (tri in triangles(part)) {
             val a = vertex(part, tri[0]); val b = vertex(part, tri[1]); val c = vertex(part, tri[2])
             assertFalse(containsXY(a, b, c, px, py), "Door opening is covered by ${part.material}")
+        }
+    }
+
+    @Test
+    fun zeroGroutTilesStillGetSideFaces() {
+        val wall = SceneTestFixtures.wall(SceneTestFixtures.room(), 0.0).copy(groutWidth = 0.0)
+        val tiles = listOf(PlacedTile(100.0, 100.0, 300.0, 200.0, tileGroupId = group.id))
+        val mesh = RoomSceneBuilder.buildSurface(input(wall, tiles))
+        val tilePart = mesh.parts.first { it.material is SceneMaterial.Tile }
+        assertEquals(4 * 5, tilePart.vertexCount, "face + four sides")
+    }
+
+    @Test
+    fun wallTilesAreOrientedLikeTheLayoutTab() {
+        // A tile at the top of the 2D layout (y = 0) sits under the ceiling line in 3D,
+        // and its image is upright: v = 0 (image top) is the higher edge.
+        val wall = SceneTestFixtures.wall(SceneTestFixtures.room(), 0.0)
+        val tiles = listOf(PlacedTile(100.0, 0.0, 300.0, 200.0, tileGroupId = group.id))
+        val tilePart = RoomSceneBuilder.buildSurface(input(wall, tiles)).parts.first { it.material is SceneMaterial.Tile }
+        val front = (0 until tilePart.vertexCount).filter {
+            abs(tilePart.positions[it * 3 + 2] - TILE_THICKNESS_MM / 1000) < 1e-6
+        }
+        val ys = front.map { tilePart.positions[it * 3 + 1].toDouble() }
+        assertEquals(ROOM_H / 1000, ys.max(), 1e-6)
+        assertEquals((ROOM_H - 200.0) / 1000, ys.min(), 1e-6)
+        for (i in front) {
+            val y = tilePart.positions[i * 3 + 1].toDouble()
+            val v = tilePart.uvs[i * 2 + 1].toDouble()
+            assertEquals(if (y > (ROOM_H - 100.0) / 1000) 0.0 else 1.0, v, 1e-6)
         }
     }
 
@@ -159,7 +190,7 @@ class RoomSceneBuilderTest {
     @Test
     fun fullTileUsesWholeTextureUpright() {
         val uv = RoomSceneBuilder.tileUv(tile(300.0, 200.0), group)
-        assertEquals(UvRect(0.0, 1.0, vLow = 1.0, vHigh = 0.0), uv)
+        assertEquals(UvRect(0.0, 1.0, vLow = 0.0, vHigh = 1.0), uv)
     }
 
     @Test
@@ -177,11 +208,19 @@ class RoomSceneBuilderTest {
     }
 
     @Test
-    fun lowYCutKeepsTheTopOfTheImage() {
-        // TOP flags the low-y edge (floor side on walls); the image top stays at the high-y edge
+    fun topCutKeepsTheBottomOfTheImage() {
+        // TOP flags the low-y edge (the top in the Layout tab): the tile was trimmed there, so the
+        // remaining piece is the lower part of the image, still upright (image top at low y)
         val uv = RoomSceneBuilder.tileUv(tile(300.0, 100.0, CutEdge.TOP), group)
         assertEquals(0.5, uv.vLow, 1e-9)
-        assertEquals(0.0, uv.vHigh, 1e-9)
+        assertEquals(1.0, uv.vHigh, 1e-9)
+    }
+
+    @Test
+    fun bottomCutKeepsTheTopOfTheImage() {
+        val uv = RoomSceneBuilder.tileUv(tile(300.0, 50.0, CutEdge.BOTTOM), group)
+        assertEquals(0.0, uv.vLow, 1e-9)
+        assertEquals(0.25, uv.vHigh, 1e-9)
     }
 
     @Test

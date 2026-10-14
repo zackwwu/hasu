@@ -103,6 +103,11 @@ class RoomEditorViewModel(
         _previewCamera.value = OrbitCamera()
     }
 
+    /** Straight-down plan view (see [OrbitCamera.top]). */
+    fun topPreviewCamera() {
+        _previewCamera.update { it.top() }
+    }
+
     /** Hide or show a wall in the 3D preview. Floors always stay visible. */
     fun toggleSurfaceHidden(surfaceId: String) {
         val surface = _surfaces.value.find { it.id == surfaceId } ?: return
@@ -145,6 +150,7 @@ class RoomEditorViewModel(
         val ids = _surfaces.value.map { it.id }.toSet()
         _hiddenSurfaceIds.update { it intersect ids }
         refreshDoorRects(roomId)
+        recomputeLayoutsOverlappingDoors()
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
         recomputeCutEntries()
         refreshPreviewScene()
@@ -162,6 +168,20 @@ class RoomEditorViewModel(
             DoorGeometry.surfaceLocalRect(room, surface)?.let { localRects[surface.id] = it }
         }
         _doorLocalRects.value = localRects
+    }
+
+    /**
+     * Stored layouts whose tiles cover the door opening were computed for an
+     * older door position (e.g. before door rects moved to the floor line in
+     * layout coordinates); recompute them so tiles and door agree again.
+     */
+    private suspend fun recomputeLayoutsOverlappingDoors() {
+        for ((surfaceId, door) in _doorLocalRects.value) {
+            val tiles = layoutRepo.getBySurface(surfaceId)?.tiles ?: continue
+            if (tiles.any { door.overlaps(RegionRect(it.x, it.y, it.width, it.height)) }) {
+                computeLayout(surfaceId)
+            }
+        }
     }
 
     suspend fun selectSurface(id: String?) {

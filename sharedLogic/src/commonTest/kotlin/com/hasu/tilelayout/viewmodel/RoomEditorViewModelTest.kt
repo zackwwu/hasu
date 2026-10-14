@@ -100,17 +100,19 @@ class RoomEditorViewModelTest {
 
     // ── Helpers ──
 
+    private lateinit var roomRepo: FakeRoomRepository
     private lateinit var surfaceRepo: FakeSurfaceRepository
     private lateinit var tileGroupRepo: FakeTileGroupRepository
     private lateinit var layoutRepo: FakeLayoutResultRepository
     private lateinit var vm: RoomEditorViewModel
 
     private fun TestScope.setUp(debounceMs: Long = 0L) {
+        roomRepo = FakeRoomRepository()
         surfaceRepo = FakeSurfaceRepository()
         tileGroupRepo = FakeTileGroupRepository()
         layoutRepo = FakeLayoutResultRepository()
         vm = RoomEditorViewModel(
-            roomRepo = FakeRoomRepository(),
+            roomRepo = roomRepo,
             surfaceRepo = surfaceRepo,
             tileGroupRepo = tileGroupRepo,
             layoutRepo = layoutRepo,
@@ -222,6 +224,53 @@ class RoomEditorViewModelTest {
 
         vm.resetPreviewCamera()
         assertEquals(OrbitCamera(), vm.previewCamera.value)
+    }
+
+    @Test
+    fun topPreviewLooksStraightDownWhateverThePitch() = runTest {
+        setUp()
+        vm.orbitPreview(0.0, -1000.0)
+        vm.zoomPreviewBy(2.0)
+
+        vm.topPreviewCamera()
+        assertEquals(90.0, vm.previewCamera.value.pitchDegrees)
+        assertEquals(2.0, vm.previewCamera.value.zoom, 1e-9)
+
+        vm.topPreviewCamera()
+        assertEquals(90.0, vm.previewCamera.value.pitchDegrees, "Top is idempotent")
+    }
+
+    // ── Door Tests ──
+
+    @Test
+    fun doorRectSitsOnTheFloorLineInLayoutCoordinates() = runTest {
+        setUp()
+        roomRepo.insert(Room(id = "r1", projectId = "p1", name = "Bath", width = 2000.0, depth = 1500.0, height = 1200.0,
+            doorWall = 0.0, doorWidth = 900.0, doorHeight = 1000.0))
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+
+        assertEquals(RegionRect(550.0, 200.0, 900.0, 1000.0), vm.doorLocalRects.value["s1"])
+    }
+
+    @Test
+    fun storedLayoutCoveringTheDoorIsRecomputedOnLoad() = runTest {
+        setUp()
+        roomRepo.insert(Room(id = "r1", projectId = "p1", name = "Bath", width = 2000.0, depth = 1500.0, height = 1200.0,
+            doorWall = 0.0, doorWidth = 900.0, doorHeight = 1000.0))
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1"))
+        tileGroupRepo.tileGroups.add(createTileGroup())
+        // Saved while the door was still at the top of the layout: tiles fill the floor-side opening
+        layoutRepo.save(LayoutResult(surfaceId = "s1", tiles = listOf(PlacedTile(600.0, 1000.0, 300.0, 200.0, tileGroupId = "tg1"))))
+
+        vm.loadSurfaces("r1")
+
+        val door = vm.doorLocalRects.value.getValue("s1")
+        val tiles = layoutRepo.getBySurface("s1")!!.tiles
+        assertTrue(tiles.isNotEmpty())
+        assertTrue(tiles.none { door.overlaps(RegionRect(it.x, it.y, it.width, it.height)) })
+        assertTrue(tiles.any { it.y < door.y }, "Tiles above the door are kept")
     }
 
     // ── Wall Visibility Tests ──

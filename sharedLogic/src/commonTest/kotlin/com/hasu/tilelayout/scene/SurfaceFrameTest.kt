@@ -10,6 +10,7 @@ import com.hasu.tilelayout.scene.SceneTestFixtures.ROOM_H
 import com.hasu.tilelayout.scene.SceneTestFixtures.ROOM_W
 import com.hasu.tilelayout.scene.SceneTestFixtures.assertVecEquals
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class SurfaceFrameTest {
@@ -39,7 +40,38 @@ class SurfaceFrameTest {
         )
         for ((rotation, end) in expectedEnds) {
             val wall = SceneTestFixtures.wall(surfaces, rotation)
-            assertVecEquals(end, SurfaceFrame.of(wall).point(wall.width, 0.0), message = "rotation $rotation")
+            assertVecEquals(end, SurfaceFrame.of(wall).point(wall.width, wall.height), message = "rotation $rotation")
+        }
+    }
+
+    @Test
+    fun wallLayoutYRunsDownFromTheTopEdge() {
+        // Same orientation as the 2D Layout tab: y = 0 is the top of the wall, y = height the floor line
+        for (wall in SceneTestFixtures.room().filter { it.type == SurfaceType.WALL }) {
+            val frame = SurfaceFrame.of(wall)
+            assertEquals(ROOM_H, frame.point(0.0, 0.0).y, 1e-9)
+            assertEquals(0.0, frame.point(0.0, wall.height).y, 1e-9)
+        }
+    }
+
+    @Test
+    fun layoutCoordinatesAreNotMirrored() {
+        // Facing a surface from inside the room (from above for the floor), +x must be to the
+        // viewer's right and +y down, i.e. u × v points away from the viewer, along −normal.
+        for (surface in SceneTestFixtures.room()) {
+            val frame = SurfaceFrame.of(surface)
+            assertVecEquals(-frame.normal, frame.u cross frame.v, message = surface.displayName())
+        }
+    }
+
+    @Test
+    fun floorPlanTopEdgeMeetsTheRotationZeroWall() {
+        val surfaces = SceneTestFixtures.room()
+        val floor = SurfaceFrame.of(SceneTestFixtures.floor(surfaces))
+        val front = SceneTestFixtures.wall(surfaces, 0.0)
+        val wall = SurfaceFrame.of(front)
+        for (x in listOf(0.0, 1234.0, ROOM_W)) {
+            assertVecEquals(wall.point(x, front.height), floor.point(x, 0.0), message = "x = $x")
         }
     }
 
@@ -87,26 +119,26 @@ class SurfaceFrameTest {
 
     @Test
     fun doorOnFrontWallSpansPositiveX() = assertCorners(
-        listOf(Vec3(1050.0, 0.0, 0.0), Vec3(1950.0, 0.0, 0.0), Vec3(1950.0, 2100.0, 0.0), Vec3(1050.0, 2100.0, 0.0)),
+        listOf(Vec3(1050.0, 2100.0, 0.0), Vec3(1950.0, 2100.0, 0.0), Vec3(1950.0, 0.0, 0.0), Vec3(1050.0, 0.0, 0.0)),
         doorCorners(0.0, wallAt(0.0, ROOM_W, 0.0, 0.0)),
     )
 
     @Test
     fun doorOnBackWallSpansNegativeX() = assertCorners(
-        listOf(Vec3(1950.0, 0.0, ROOM_D), Vec3(1050.0, 0.0, ROOM_D), Vec3(1050.0, 2100.0, ROOM_D), Vec3(1950.0, 2100.0, ROOM_D)),
+        listOf(Vec3(1950.0, 2100.0, ROOM_D), Vec3(1050.0, 2100.0, ROOM_D), Vec3(1050.0, 0.0, ROOM_D), Vec3(1950.0, 0.0, ROOM_D)),
         doorCorners(180.0, wallAt(180.0, ROOM_W, ROOM_W, ROOM_D)),
     )
 
     @Test
     fun doorOnLeftWallSpansNegativeZ() = assertCorners(
         // offset 1550 = (4000 − 900) / 2 along −Z from anchor z = 4000
-        listOf(Vec3(0.0, 0.0, 2450.0), Vec3(0.0, 0.0, 1550.0), Vec3(0.0, 2100.0, 1550.0), Vec3(0.0, 2100.0, 2450.0)),
+        listOf(Vec3(0.0, 2100.0, 2450.0), Vec3(0.0, 2100.0, 1550.0), Vec3(0.0, 0.0, 1550.0), Vec3(0.0, 0.0, 2450.0)),
         doorCorners(90.0, wallAt(90.0, ROOM_D, 0.0, ROOM_D)),
     )
 
     @Test
     fun doorOnRightWallSpansPositiveZ() = assertCorners(
-        listOf(Vec3(ROOM_W, 0.0, 1550.0), Vec3(ROOM_W, 0.0, 2450.0), Vec3(ROOM_W, 2100.0, 2450.0), Vec3(ROOM_W, 2100.0, 1550.0)),
+        listOf(Vec3(ROOM_W, 2100.0, 1550.0), Vec3(ROOM_W, 2100.0, 2450.0), Vec3(ROOM_W, 0.0, 2450.0), Vec3(ROOM_W, 0.0, 1550.0)),
         doorCorners(270.0, wallAt(270.0, ROOM_D, ROOM_W, 0.0)),
     )
 }

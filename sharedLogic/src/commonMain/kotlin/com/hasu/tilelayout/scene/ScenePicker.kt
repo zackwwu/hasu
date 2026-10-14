@@ -28,28 +28,42 @@ object ScenePicker {
         return bestId
     }
 
-    /** Distance (mm) along the ray to the surface's solid, or null on a miss. */
+    /**
+     * Distance (mm) along the ray to the surface's solid, or null on a miss.
+     * A door wall is the slab minus the opening (cut through its full depth),
+     * so a ray that passes through the door can still hit the jamb or header.
+     */
     private fun intersect(origin: Vec3, direction: Vec3, target: PickTarget): Double? {
         val surface = target.surface
         val frame = SurfaceFrame.of(surface)
         val o = frame.toLocal(origin)
         val d = frame.directionToLocal(direction)
-        val isWall = surface.type == SurfaceType.WALL
         val front = RoomSceneBuilder.TILE_THICKNESS_MM
-        val min = if (isWall) {
-            Vec3(0.0, -RoomSceneBuilder.FLOOR_THICKNESS_MM, -RoomSceneBuilder.WALL_THICKNESS_MM)
+        val footprint: Rect2
+        val back: Double
+        if (surface.type == SurfaceType.WALL) {
+            footprint = Rect2(
+                0.0, 0.0,
+                surface.width + RoomSceneBuilder.WALL_THICKNESS_MM,
+                surface.height + RoomSceneBuilder.FLOOR_THICKNESS_MM,
+            )
+            back = -RoomSceneBuilder.WALL_THICKNESS_MM
         } else {
-            Vec3(0.0, 0.0, -RoomSceneBuilder.FLOOR_THICKNESS_MM)
+            footprint = Rect2(0.0, 0.0, surface.width, surface.height)
+            back = -RoomSceneBuilder.FLOOR_THICKNESS_MM
         }
-        val max = if (isWall) {
-            Vec3(surface.width + RoomSceneBuilder.WALL_THICKNESS_MM, surface.height, front)
-        } else {
-            Vec3(surface.width, surface.height, front)
-        }
+        val door = target.doorRect
+            ?.takeIf { surface.type == SurfaceType.WALL }
+            ?.let { Rect2(it.x, it.y, it.x + it.width, it.y + it.height) }
+        return footprint.minus(door)
+            .mapNotNull { slab(o, d, Vec3(it.x0, it.y0, back), Vec3(it.x1, it.y1, front)) }
+            .minOrNull()
+    }
 
-        var tEnter = -Double.MAX_VALUE
+    /** Ray / axis-aligned box entry distance, clamped to 0 when the origin is inside. */
+    private fun slab(o: Vec3, d: Vec3, min: Vec3, max: Vec3): Double? {
+        var tEnter = 0.0
         var tExit = Double.MAX_VALUE
-        var enterAxis = -1
         val os = doubleArrayOf(o.x, o.y, o.z)
         val ds = doubleArrayOf(d.x, d.y, d.z)
         val mins = doubleArrayOf(min.x, min.y, min.z)
@@ -62,20 +76,10 @@ object ScenePicker {
             var t0 = (mins[axis] - os[axis]) / ds[axis]
             var t1 = (maxs[axis] - os[axis]) / ds[axis]
             if (t0 > t1) { val tmp = t0; t0 = t1; t1 = tmp }
-            if (t0 > tEnter) { tEnter = t0; enterAxis = axis }
-            if (t1 < tExit) tExit = t1
+            tEnter = maxOf(tEnter, t0)
+            tExit = minOf(tExit, t1)
+            if (tExit < tEnter) return null
         }
-        if (tExit < maxOf(tEnter, 0.0)) return null
-        val t = maxOf(tEnter, 0.0)
-
-        val door = target.doorRect
-        if (isWall && door != null && enterAxis == 2) {
-            val hitX = o.x + d.x * t
-            val hitY = o.y + d.y * t
-            val inDoor = hitX > door.x && hitX < door.x + door.width &&
-                hitY > door.y && hitY < door.y + door.height
-            if (inDoor) return null
-        }
-        return t
+        return tEnter
     }
 }

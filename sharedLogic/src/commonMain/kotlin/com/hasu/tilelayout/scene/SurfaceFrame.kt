@@ -10,10 +10,14 @@ import kotlin.math.sin
 /**
  * Orthonormal frame of a surface in world space (millimetres).
  *
- * Surface-local coordinates map as: `x` along [u] from the anchor corner,
- * `y` along [v] (walls: up from the floor; floor: towards +Z), and `depth`
- * along [normal], which points into the room. Walls of rotation 0/90/180/270
- * span +X/−Z/−X/+Z from their anchor, matching [com.hasu.tilelayout.engine.DoorGeometry].
+ * Surface-local coordinates are the layout's canvas coordinates, exactly as
+ * the 2D Layout tab draws them: `x` to the right along [u] from the anchor
+ * corner, `y` *downwards* along [v] from the top edge (walls: from the
+ * ceiling line towards the floor; floor: from the rotation-0 wall's side
+ * towards +Z, i.e. a plan seen from above), and `depth` along [normal], which
+ * points into the room. Both mappings are unmirrored: seen from inside the
+ * room (or from above for the floor) +x is to the right and +y is down.
+ * Walls of rotation 0/90/180/270 span +X/−Z/−X/+Z from their anchor.
  */
 data class SurfaceFrame(
     val origin: Vec3,
@@ -49,9 +53,9 @@ data class SurfaceFrame(
                     val c = snap(cos(rad))
                     val s = snap(sin(rad))
                     SurfaceFrame(
-                        origin = origin,
+                        origin = origin + Vec3.UP * surface.height,
                         u = Vec3(c, 0.0, -s),
-                        v = Vec3.UP,
+                        v = -Vec3.UP,
                         normal = Vec3(s, 0.0, c),
                     )
                 }

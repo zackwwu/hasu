@@ -13,7 +13,8 @@ class ScenePickerTest {
     private val front = SceneTestFixtures.wall(surfaces, 0.0)
     private val back = SceneTestFixtures.wall(surfaces, 180.0)
     private val floor = SceneTestFixtures.floor(surfaces)
-    private val door = RegionRect(1050.0, 0.0, 900.0, 2100.0)
+    // Layout coordinates: y down from the top of the 2400 wall, so the opening is 0–2100 mm above the floor
+    private val door = RegionRect(1050.0, 300.0, 900.0, 2100.0)
 
     private fun targets(hidden: Set<String> = emptySet(), withDoor: Boolean = false) = surfaces
         .filter { it.id !in hidden }
@@ -37,6 +38,14 @@ class ScenePickerTest {
     fun rayThroughTheDoorwayHitsWhatIsBehindIt() {
         assertEquals(back.id, ScenePicker.pick(rayIntoRoomAt(ROOM_W / 2, 1000.0), targets(withDoor = true)))
         assertEquals(front.id, ScenePicker.pick(rayIntoRoomAt(ROOM_W / 2, 2300.0), targets(withDoor = true)))
+    }
+
+    @Test
+    fun rayEnteringTheDoorwayCanStillHitTheJamb() {
+        // Enters the wall's outer face inside the opening at x = 1.9 m, then crosses the jamb at x = 1.95 m
+        val dir = Vec3(1.0, 0.0, 1.0).normalized()
+        val ray = Ray(Vec3(0.9, 1.0, -1.1), dir)
+        assertEquals(front.id, ScenePicker.pick(ray, targets(withDoor = true)))
     }
 
     @Test

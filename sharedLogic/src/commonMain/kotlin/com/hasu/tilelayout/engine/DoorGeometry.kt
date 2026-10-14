@@ -13,9 +13,10 @@ import com.hasu.tilelayout.models.normalizedRotation
 object DoorGeometry {
 
     /**
-     * Door rect in surface-local coords (x along the wall's span from its
-     * anchor corner, y from the floor up). Null when the room has no door
-     * or this surface is not the door wall.
+     * Door rect in surface-local layout coords (x along the wall's span from
+     * its anchor corner, y down from the top of the wall, like every other
+     * layout rect), so the opening sits on the floor line. Null when the room
+     * has no door or this surface is not the door wall.
      */
     fun surfaceLocalRect(room: Room, surface: Surface): RegionRect? {
         val wall = room.doorWall ?: return null
@@ -24,6 +25,7 @@ object DoorGeometry {
             return null
         }
         val offset = room.doorOffset ?: (surface.width - room.doorWidth) / 2.0
-        return RegionRect(offset, 0.0, room.doorWidth, room.doorHeight)
+        val height = minOf(room.doorHeight, surface.height)
+        return RegionRect(offset, surface.height - height, room.doorWidth, height)
     }
 }

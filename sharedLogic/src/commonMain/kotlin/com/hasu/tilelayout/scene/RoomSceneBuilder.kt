@@ -7,7 +7,7 @@ import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 
-/** Inputs for one surface of the 3D scene. Tile coordinates are surface-local millimetres. */
+/** Inputs for one surface of the 3D scene. Tile coordinates are surface-local layout millimetres (see [SurfaceFrame]). */
 data class SurfaceSceneInput(
     val surface: Surface,
     val tiles: List<PlacedTile> = emptyList(),
@@ -19,9 +19,12 @@ data class SurfaceSceneInput(
 /**
  * Turns surfaces and their computed tile layouts into GPU-ready meshes.
  *
- * Each wall is a solid slab behind its interior face (extended by its own
- * thickness past its span end so neighbouring walls close the corners), with
- * the door cut through it. The floor is a slab below y = 0. On the interior
+ * All rects are in the layout's top-down canvas coordinates ([SurfaceFrame]),
+ * so the 3D scene matches the 2D Layout tab tile for tile. Each wall is a
+ * solid slab behind its interior face (extended by its own thickness past
+ * its span end so neighbouring walls close the corners, and down past the
+ * floor line by the floor thickness), with the door cut through it. The
+ * floor is a slab below its top face. On the interior
  * side every tile gets a grout bed (the tile rect grown by the grout width,
  * like the 2D canvas) and a raised tile body on top of it.
  */
@@ -31,7 +34,7 @@ object RoomSceneBuilder {
     const val GROUT_DEPTH_MM = 2.0
     const val TILE_THICKNESS_MM = 8.0
 
-    /** Above this many tiles on a surface only tile faces are emitted (no side walls) to bound vertex count. */
+    /** Above this many tiles on a surface only tile faces are emitted (no side faces) to bound vertex count. */
     const val MAX_TILES_WITH_EDGES = 4000
 
     fun build(inputs: List<SurfaceSceneInput>): RoomScene = RoomScene(inputs.map(::buildSurface))
@@ -54,7 +57,7 @@ object RoomSceneBuilder {
             val grout = MeshAccumulator(frame)
             val tilesByGroup = linkedMapOf<String, MeshAccumulator>()
             val g = surface.groutWidth.coerceAtLeast(0.0)
-            val withEdges = g > 0.0 && input.tiles.size <= MAX_TILES_WITH_EDGES
+            val withEdges = input.tiles.size <= MAX_TILES_WITH_EDGES
 
             for (tile in input.tiles) {
                 val rect = Rect2(tile.x, tile.y, tile.x + tile.width, tile.y + tile.height)
@@ -99,21 +102,22 @@ object RoomSceneBuilder {
 
     private fun wallBody(acc: MeshAccumulator, width: Double, height: Double, door: Rect2?) {
         val t = WALL_THICKNESS_MM
-        val base = -FLOOR_THICKNESS_MM
+        val bottom = height + FLOOR_THICKNESS_MM
         val length = width + t
 
         Rect2(0.0, 0.0, length, height).minus(door).forEach { acc.face(it, 0.0, front = true) }
-        Rect2(0.0, base, length, height).minus(door).forEach { acc.face(it, -t, front = false) }
-        acc.sideY(height, 0.0, length, -t, 0.0, positive = true)
-        acc.sideY(base, 0.0, length, -t, 0.0, positive = false)
-        acc.sideX(0.0, base, height, -t, 0.0, positive = false)
-        acc.sideX(length, base, height, -t, 0.0, positive = true)
+        Rect2(0.0, 0.0, length, bottom).minus(door).forEach { acc.face(it, -t, front = false) }
+        acc.sideY(0.0, 0.0, length, -t, 0.0, positive = false)
+        acc.sideY(bottom, 0.0, length, -t, 0.0, positive = true)
+        acc.sideX(0.0, 0.0, bottom, -t, 0.0, positive = false)
+        acc.sideX(length, 0.0, bottom, -t, 0.0, positive = true)
 
         if (door != null) {
             acc.sideX(door.x0, door.y0, door.y1, -t, 0.0, positive = true)
             acc.sideX(door.x1, door.y0, door.y1, -t, 0.0, positive = false)
-            acc.sideY(door.y0, door.x0, door.x1, -t, 0.0, positive = true)
-            if (door.y1 < height) acc.sideY(door.y1, door.x0, door.x1, -t, 0.0, positive = false)
+            // Threshold on the floor line, and the header's underside when the door is shorter than the wall
+            acc.sideY(door.y1, door.x0, door.x1, -t, 0.0, positive = false)
+            if (door.y0 > 0.0) acc.sideY(door.y0, door.x0, door.x1, -t, 0.0, positive = true)
         }
     }
 
@@ -131,8 +135,9 @@ object RoomSceneBuilder {
     /**
      * Texture window for a (possibly cut) tile. A cut tile shows the part of
      * the full tile that remains after trimming the flagged edge, so pattern
-     * texture lines up with the uncut neighbours. The image is upright on
-     * walls: its top row sits at the tile's high-y edge.
+     * texture lines up with the uncut neighbours. The image is upright like
+     * in the 2D canvas: its top row (v = 0) sits at the tile's low-y edge, so
+     * a TOP cut keeps the bottom of the image and a LEFT cut keeps its right.
      */
     internal fun tileUv(tile: PlacedTile, group: TileGroup?): UvRect {
         val fullW = group?.tileWidth?.takeIf { it > 0 } ?: tile.width
@@ -147,7 +152,7 @@ object RoomSceneBuilder {
             trimmedLow = CutEdge.TOP in tile.cutEdges,
             trimmedHigh = CutEdge.BOTTOM in tile.cutEdges,
         )
-        return UvRect(u0, u1, vLow = 1.0 - f0, vHigh = 1.0 - f1)
+        return UvRect(u0, u1, vLow = f0, vHigh = f1)
     }
 
     private fun window(fraction: Double, trimmedLow: Boolean, trimmedHigh: Boolean): Pair<Double, Double> {

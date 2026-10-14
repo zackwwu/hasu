@@ -41,23 +41,30 @@ class DoorGeometryTest {
     @Test
     fun localRectCentersWhenOffsetNull() {
         val rect = DoorGeometry.surfaceLocalRect(room(), wall(0.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), rect)
+        // Layout y runs down from the top of the 2400 wall, so a 2100 door starts at 300 and ends on the floor line
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), rect)
     }
 
     @Test
     fun localRectUsesExplicitOffset() {
         val rect = DoorGeometry.surfaceLocalRect(room(doorOffset = 200.0), wall(0.0))
-        assertEquals(RegionRect(200.0, 0.0, 900.0, 2100.0), rect)
+        assertEquals(RegionRect(200.0, 300.0, 900.0, 2100.0), rect)
     }
 
     @Test
     fun localRectMatchesDoorWallAcrossRotations() {
         // Door on the back wall (180): rect lands on the surface rotated 180
         val rect = DoorGeometry.surfaceLocalRect(room(doorWall = 180.0), wall(180.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), rect)
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), rect)
         // Door on the left wall (90): rect on the surface rotated 90
         val leftRect = DoorGeometry.surfaceLocalRect(room(doorWall = 90.0), wall(90.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), leftRect)
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), leftRect)
+    }
+
+    @Test
+    fun localRectIsClampedToAWallShorterThanTheDoor() {
+        val rect = DoorGeometry.surfaceLocalRect(room(), wall(0.0).copy(height = 2000.0))
+        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2000.0), rect)
     }
 
     @Test

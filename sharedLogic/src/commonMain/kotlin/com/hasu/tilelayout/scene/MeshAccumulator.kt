@@ -27,10 +27,10 @@ internal data class Rect2(val x0: Double, val y0: Double, val x1: Double, val y1
     }
 }
 
-/** Texture window of a face: u across local x, v at the low-y and high-y edges. */
+/** Texture window of a face: u across local x, v at the low-y and high-y edges (v = 0 is the image top). */
 internal data class UvRect(val u0: Double, val u1: Double, val vLow: Double, val vHigh: Double) {
     companion object {
-        val FULL = UvRect(0.0, 1.0, 1.0, 0.0)
+        val FULL = UvRect(0.0, 1.0, 0.0, 1.0)
     }
 }
 
