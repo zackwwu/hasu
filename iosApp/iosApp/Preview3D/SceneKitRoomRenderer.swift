@@ -9,7 +9,10 @@ import UIKit
 ///
 /// Lighting is baked into vertex colours by the shared module and every
 /// material uses `.constant`, so iOS shades faces exactly like Android and
-/// no per-pixel lighting runs on the GPU.
+/// no per-pixel lighting runs on the GPU. The shade is a linear-light factor:
+/// SceneKit's linear-space rendering (on by default; never set
+/// `SCNDisableLinearSpaceRendering`) linearises sRGB `UIColor`s and textures
+/// before multiplying by it, matching Filament's explicit sRGB → linear path.
 @MainActor
 final class SceneKitRoomRenderer {
     let scene = SCNScene()
@@ -54,24 +57,36 @@ final class SceneKitRoomRenderer {
         applyCamera()
     }
 
-    /// Offscreen render with the current camera and hidden walls, without the selection tint.
+    /// Offscreen render with the current camera and hidden walls, without the
+    /// selection tint. Renders a clone of the visible nodes so the live
+    /// scene (and its highlight) is never touched.
     func snapshot(device: MTLDevice?, size: CGSize) -> UIImage? {
-        let renderer = SCNRenderer(device: device ?? MTLCreateSystemDefaultDevice(), options: nil)
-        renderer.scene = scene
+        let exportScene = SCNScene()
+        exportScene.background.contents = scene.background.contents
+        for (id, entry) in surfaceNodes where !hiddenIds.contains(id) {
+            // clone() shares geometry and materials with the live node
+            let node = entry.node.clone()
+            if id == selectedId {
+                for child in node.childNodes {
+                    guard let geometry = child.geometry?.copy() as? SCNGeometry else { continue }
+                    geometry.materials = geometry.materials.map { material in
+                        let untinted = material.copy() as? SCNMaterial ?? material
+                        untinted.multiply.contents = UIColor.white
+                        return untinted
+                    }
+                    child.geometry = geometry
+                }
+            }
+            exportScene.rootNode.addChildNode(node)
+        }
         let exportCamera = SCNNode()
         exportCamera.camera = cameraNode.camera?.copy() as? SCNCamera
         pose(exportCamera, aspect: Double(size.width / size.height))
-        scene.rootNode.addChildNode(exportCamera)
-        renderer.pointOfView = exportCamera
+        exportScene.rootNode.addChildNode(exportCamera)
 
-        let previousSelection = selectedId
-        selectedId = nil
-        applyVisibilityAndSelection()
-        defer {
-            selectedId = previousSelection
-            applyVisibilityAndSelection()
-            exportCamera.removeFromParentNode()
-        }
+        let renderer = SCNRenderer(device: device ?? MTLCreateSystemDefaultDevice(), options: nil)
+        renderer.scene = exportScene
+        renderer.pointOfView = exportCamera
         return renderer.snapshot(atTime: 0, with: size, antialiasingMode: .multisampling4X)
     }
 
@@ -93,6 +108,23 @@ final class SceneKitRoomRenderer {
             entry.node.removeFromParentNode()
         }
         surfaceNodes = next
+        releaseUnusedTextures()
+    }
+
+    private func usedTexturePaths() -> Set<String> {
+        var paths: Set<String> = []
+        for entry in surfaceNodes.values {
+            for part in entry.mesh.parts {
+                if let path = (part.material as? SceneMaterialTile)?.texturePath { paths.insert(path) }
+            }
+        }
+        return paths
+    }
+
+    /// Drop decoded images no remaining part uses, e.g. after a tile group's image was replaced.
+    private func releaseUnusedTextures() {
+        let used = usedTexturePaths()
+        textures = textures.filter { used.contains($0.key) }
     }
 
     private func makeNode(for mesh: SurfaceMesh) -> SCNNode {
@@ -137,6 +169,8 @@ final class SceneKitRoomRenderer {
         )
     }
 
+    // Kotlin/Native exports classes nested in an interface with concatenated
+    // Swift names (`SceneMaterialSolid`), since Swift protocols cannot nest types.
     private func makeMaterial(_ sceneMaterial: SceneMaterial) -> SCNMaterial {
         let material = SCNMaterial()
         material.lightingModel = .constant
@@ -165,7 +199,7 @@ final class SceneKitRoomRenderer {
             let image = await Task.detached(priority: .userInitiated) { Self.decodeTexture(path) }.value
             guard let self else { return }
             self.pendingTextures.remove(path)
-            guard let image else { return }
+            guard let image, self.usedTexturePaths().contains(path) else { return }
             self.textures[path] = image
             self.applyTexture(image, path: path)
         }

@@ -70,6 +70,11 @@ final class IOSRoomEditorViewModel: ObservableObject {
         refreshPreviewCamera()
     }
 
+    func topPreviewCamera() {
+        sharedVM.topPreviewCamera()
+        refreshPreviewCamera()
+    }
+
     func zoomPreviewBy(_ factor: Double) {
         sharedVM.zoomPreviewBy(factor: factor)
         refreshPreviewCamera()

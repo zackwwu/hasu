@@ -106,7 +106,10 @@ struct RoomSceneView: UIViewRepresentable {
             guard let view = gesture.view else { return }
             let t = gesture.translation(in: view)
             gesture.setTranslation(.zero, in: view)
-            if t.y != 0 { callbacks?.zoom(exp(Double(t.y) * Self.scrollZoomRate)) }
+            // Translation follows the content: rolling the wheel away from the user gives +y
+            if t.y != 0 {
+                callbacks?.zoom(OrbitCamera.companion.zoomFactorForScroll(notchesTowardsUser: -Double(t.y) / Self.pointsPerScrollNotch))
+            }
         }
 
         @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
@@ -119,7 +122,8 @@ struct RoomSceneView: UIViewRepresentable {
             shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
         ) -> Bool { true }
 
-        private static let scrollZoomRate = 0.005
+        /// Approximate scroll translation of one mouse-wheel notch, so a notch zooms as much as on Android.
+        private static let pointsPerScrollNotch = 30.0
     }
 }
 

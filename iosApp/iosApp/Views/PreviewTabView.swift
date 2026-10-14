@@ -32,10 +32,10 @@ struct PreviewTabView: View {
                     },
                     onTap: { location, viewport in
                         if let id = vm.pickSurface(
-                            x: location.x,
-                            y: location.y,
-                            viewportWidth: viewport.width,
-                            viewportHeight: viewport.height
+                            x: Double(location.x),
+                            y: Double(location.y),
+                            viewportWidth: Double(viewport.width),
+                            viewportHeight: Double(viewport.height)
                         ) {
                             vm.selectSurface(id)
                         }
@@ -60,7 +60,7 @@ struct PreviewTabView: View {
                     Spacer()
                     HStack(spacing: 8) {
                         Spacer()
-                        Button("Top") { vm.orbitPreview(deltaYaw: 0, deltaPitch: 90) }
+                        Button("Top") { vm.topPreviewCamera() }
                             .accessibilityIdentifier("preview-top")
                         Button("Reset view") { vm.resetPreviewCamera() }
                             .accessibilityIdentifier("preview-reset")
