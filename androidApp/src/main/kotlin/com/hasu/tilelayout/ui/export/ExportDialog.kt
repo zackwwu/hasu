@@ -43,7 +43,8 @@ import kotlinx.coroutines.withContext
 fun ExportDialog(
     title: String,
     onDismiss: () -> Unit,
-    onRender: (dpi: Int) -> Bitmap?,
+    /** Produces the export image; runs in a coroutine and picks its own dispatcher. */
+    onRender: suspend (dpi: Int) -> Bitmap?,
 ) {
     var dpi by remember { mutableIntStateOf(ExportHelper.DEFAULT_DPI) }
     var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
@@ -53,9 +54,7 @@ fun ExportDialog(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(dpi) {
-        previewBitmap = withContext(Dispatchers.Default) {
-            onRender(dpi)
-        }
+        previewBitmap = onRender(dpi)
     }
 
     val performSave: () -> Unit = {

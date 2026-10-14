@@ -34,7 +34,9 @@ import com.hasu.tilelayout.ui.export.ExportDialog
 import com.hasu.tilelayout.ui.export.ExportHelper
 import com.hasu.tilelayout.ui.export.drawTilesToCanvas
 import com.hasu.tilelayout.viewmodel.RoomEditorViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 @Composable
 fun LayoutTab(vm: RoomEditorViewModel) {
@@ -170,14 +172,16 @@ fun LayoutTab(vm: RoomEditorViewModel) {
                 title = "2D Layout",
                 onDismiss = { showExport = false },
                 onRender = { dpi ->
-                    val scale = dpi / 72f
-                    // Compute pixel dimensions from the surface size
-                    val selectedSurface = surfaces.find { it.id == selectedId }
-                    val wPx = ((selectedSurface?.width ?: 1000.0) * scale).toInt()
-                    val hPx = ((selectedSurface?.height ?: 1000.0) * scale).toInt()
-                    ExportHelper.renderToBitmap(wPx, hPx) { canvas ->
-                        // Draw tiles using android.graphics.Canvas (mirror of drawTiles)
-                        drawTilesToCanvas(canvas, currentTiles, groutColor, groutWidth, scale)
+                    withContext(Dispatchers.Default) {
+                        val scale = dpi / 72f
+                        // Compute pixel dimensions from the surface size
+                        val selectedSurface = surfaces.find { it.id == selectedId }
+                        val wPx = ((selectedSurface?.width ?: 1000.0) * scale).toInt()
+                        val hPx = ((selectedSurface?.height ?: 1000.0) * scale).toInt()
+                        ExportHelper.renderToBitmap(wPx, hPx) { canvas ->
+                            // Draw tiles using android.graphics.Canvas (mirror of drawTiles)
+                            drawTilesToCanvas(canvas, currentTiles, groutColor, groutWidth, scale)
+                        }
                     }
                 }
             )
