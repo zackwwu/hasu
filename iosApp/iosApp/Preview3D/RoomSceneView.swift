@@ -84,7 +84,8 @@ struct RoomSceneView: UIViewRepresentable {
 
             let tap = UITapGestureRecognizer(target: self, action: #selector(handleTap(_:)))
 
-            [pan, pinch, scroll, tap].forEach(view.addGestureRecognizer)
+            let recognizers: [UIGestureRecognizer] = [pan, pinch, scroll, tap]
+            recognizers.forEach(view.addGestureRecognizer)
         }
 
         @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
