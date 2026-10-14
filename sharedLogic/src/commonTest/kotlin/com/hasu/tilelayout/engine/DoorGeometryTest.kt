@@ -41,23 +41,30 @@ class DoorGeometryTest {
     @Test
     fun localRectCentersWhenOffsetNull() {
         val rect = DoorGeometry.surfaceLocalRect(room(), wall(0.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), rect)
+        // Layout y runs down from the top of the 2400 wall, so a 2100 door starts at 300 and ends on the floor line
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), rect)
     }
 
     @Test
     fun localRectUsesExplicitOffset() {
         val rect = DoorGeometry.surfaceLocalRect(room(doorOffset = 200.0), wall(0.0))
-        assertEquals(RegionRect(200.0, 0.0, 900.0, 2100.0), rect)
+        assertEquals(RegionRect(200.0, 300.0, 900.0, 2100.0), rect)
     }
 
     @Test
     fun localRectMatchesDoorWallAcrossRotations() {
         // Door on the back wall (180): rect lands on the surface rotated 180
         val rect = DoorGeometry.surfaceLocalRect(room(doorWall = 180.0), wall(180.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), rect)
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), rect)
         // Door on the left wall (90): rect on the surface rotated 90
         val leftRect = DoorGeometry.surfaceLocalRect(room(doorWall = 90.0), wall(90.0))
-        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2100.0), leftRect)
+        assertEquals(RegionRect(1050.0, 300.0, 900.0, 2100.0), leftRect)
+    }
+
+    @Test
+    fun localRectIsClampedToAWallShorterThanTheDoor() {
+        val rect = DoorGeometry.surfaceLocalRect(room(), wall(0.0).copy(height = 2000.0))
+        assertEquals(RegionRect(1050.0, 0.0, 900.0, 2000.0), rect)
     }
 
     @Test
@@ -81,76 +88,5 @@ class DoorGeometryTest {
             position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
         )
         assertNull(DoorGeometry.surfaceLocalRect(room(), floor))
-    }
-
-    // ── worldCorners ──
-
-    private fun pt(x: Double, y: Double, z: Double) = WorldPoint(x, y, z)
-
-    @Test
-    fun worldCornersFrontWallSpanPositiveX() {
-        val corners = DoorGeometry.worldCorners(room(), wall(0.0))!!
-        assertEquals(
-            listOf(
-                pt(1050.0, 0.0, 0.0),
-                pt(1950.0, 0.0, 0.0),
-                pt(1950.0, 2100.0, 0.0),
-                pt(1050.0, 2100.0, 0.0),
-            ),
-            corners,
-        )
-    }
-
-    @Test
-    fun worldCornersBackWallSpanNegativeX() {
-        val back = wall(180.0).copy(position = SurfacePosition(3000.0, 0.0, 4000.0, 180.0))
-        val corners = DoorGeometry.worldCorners(room(doorWall = 180.0), back)!!
-        assertEquals(
-            listOf(
-                pt(1950.0, 0.0, 4000.0),
-                pt(1050.0, 0.0, 4000.0),
-                pt(1050.0, 2100.0, 4000.0),
-                pt(1950.0, 2100.0, 4000.0),
-            ),
-            corners,
-        )
-    }
-
-    @Test
-    fun worldCornersLeftWallSpanNegativeZ() {
-        val left = wall(90.0, width = 4000.0).copy(position = SurfacePosition(0.0, 0.0, 4000.0, 90.0))
-        val roomLeft = room(doorWall = 90.0)
-        val corners = DoorGeometry.worldCorners(roomLeft, left)!!
-        // offset 1550 = (4000 − 900) / 2 along −Z from anchor z=4000
-        assertEquals(
-            listOf(
-                pt(0.0, 0.0, 2450.0),
-                pt(0.0, 0.0, 1550.0),
-                pt(0.0, 2100.0, 1550.0),
-                pt(0.0, 2100.0, 2450.0),
-            ),
-            corners,
-        )
-    }
-
-    @Test
-    fun worldCornersRightWallSpanPositiveZ() {
-        val right = wall(270.0, width = 4000.0).copy(position = SurfacePosition(3000.0, 0.0, 0.0, 270.0))
-        val corners = DoorGeometry.worldCorners(room(doorWall = 270.0), right)!!
-        assertEquals(
-            listOf(
-                pt(3000.0, 0.0, 1550.0),
-                pt(3000.0, 0.0, 2450.0),
-                pt(3000.0, 2100.0, 2450.0),
-                pt(3000.0, 2100.0, 1550.0),
-            ),
-            corners,
-        )
-    }
-
-    @Test
-    fun worldCornersNullWhenNoDoorOrWrongWall() {
-        assertNull(DoorGeometry.worldCorners(room(doorWall = null), wall(0.0)))
-        assertNull(DoorGeometry.worldCorners(room(doorWall = 0.0), wall(270.0)))
     }
 }

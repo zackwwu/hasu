@@ -30,6 +30,9 @@ dependencies {
     implementation(libs.camerax.view)
     // OpenCV Android SDK — ~30MB, includes native libs for arm64/x86_64
     implementation(libs.opencv)
+    // Filament 3D engine for the room preview; gltfio supplies its precompiled ubershader materials
+    implementation(libs.filament.android)
+    implementation(libs.filament.gltfio)
 
     implementation(libs.sqldelight.android)
 

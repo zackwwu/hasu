@@ -17,8 +17,8 @@ struct ExportService {
     ///
     /// The content is laid out at `size` points; the output pixel size is
     /// `size` scaled by `dpi / 72`. Pass a `Canvas` (e.g. one that calls
-    /// `SurfaceCanvas.drawTiles` or `IsometricCanvas.drawIsometricRoom`) and
-    /// add a `.background(.white)` so the exported PNG is opaque.
+    /// `SurfaceCanvas.drawTiles`) and add a `.background(.white)` so the
+    /// exported PNG is opaque. The 3D preview exports via `SCNRenderer` instead.
     static func renderToImage<Content: View>(
         content: Content,
         size: CGSize = CGSize(width: 1024, height: 1024),  // = exportCanvasSize

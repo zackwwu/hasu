@@ -111,18 +111,11 @@ appId: ${APP_ID}
 - tapOn: "Preview"
 - takeScreenshot: preview-tab
 
-# ── Rotate view ──
-- runFlow:
-    when:
-      platform: iOS
-    commands:
-      - tapOn:
-          id: "rotate-right"
-- runFlow:
-    when:
-      platform: Android
-    commands:
-      - tapOn: "▶"
+# ── Orbit the 3D view ──
+- swipe:
+    start: "70%, 35%"
+    end: "30%, 35%"
+    duration: 600
 - takeScreenshot: preview-rotated
 
 # ── Switch to Cut List tab ──
