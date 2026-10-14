@@ -15,6 +15,8 @@ import com.hasu.tilelayout.models.SurfaceTileGroup
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 import com.hasu.tilelayout.models.TilePattern
+import com.hasu.tilelayout.scene.OrbitCamera
+import com.hasu.tilelayout.scene.SceneMaterial
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -193,31 +195,124 @@ class RoomEditorViewModelTest {
         assertTrue(vm.currentTiles.value.isEmpty(), "Deselecting should clear tiles")
     }
 
-    // ── Rotation Tests ──
+    // ── 3D Preview Camera Tests ──
 
     @Test
-    fun rotateViewUpdatesViewAngle() = runTest {
+    fun orbitPreviewRotatesAndClampsCamera() = runTest {
         setUp()
-        assertEquals(0, vm.viewAngle.value)
+        val start = vm.previewCamera.value
+        assertEquals(OrbitCamera(), start)
 
-        vm.rotateView(90)
-        assertEquals(90, vm.viewAngle.value)
+        vm.orbitPreview(30.0, 10.0)
+        assertEquals(start.yawDegrees + 30.0, vm.previewCamera.value.yawDegrees, 1e-9)
+        assertEquals(start.pitchDegrees + 10.0, vm.previewCamera.value.pitchDegrees, 1e-9)
 
-        vm.rotateView(-90)
-        assertEquals(0, vm.viewAngle.value)
-
-        vm.rotateView(360)
-        assertEquals(0, vm.viewAngle.value)
+        vm.orbitPreview(0.0, 1000.0)
+        assertEquals(OrbitCamera.MAX_PITCH, vm.previewCamera.value.pitchDegrees)
     }
 
     @Test
-    fun rotateViewHandlesNegativeAngles() = runTest {
+    fun zoomPreviewByClampsAndResetRestoresDefaults() = runTest {
         setUp()
-        vm.rotateView(-90)
-        assertEquals(270, vm.viewAngle.value)
+        vm.zoomPreviewBy(2.0)
+        assertEquals(2.0, vm.previewCamera.value.zoom, 1e-9)
+        vm.zoomPreviewBy(1000.0)
+        assertEquals(OrbitCamera.MAX_ZOOM, vm.previewCamera.value.zoom)
+        vm.orbitPreview(45.0, 0.0)
 
-        vm.rotateView(-180)
-        assertEquals(90, vm.viewAngle.value)
+        vm.resetPreviewCamera()
+        assertEquals(OrbitCamera(), vm.previewCamera.value)
+    }
+
+    // ── Wall Visibility Tests ──
+
+    @Test
+    fun toggleSurfaceHiddenHidesAndShowsWalls() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createWallSurface("w2", rotation = 90.0)))
+        vm.loadSurfaces("r1")
+
+        vm.toggleSurfaceHidden("w1")
+        vm.toggleSurfaceHidden("w2")
+        assertEquals(setOf("w1", "w2"), vm.hiddenSurfaceIds.value)
+
+        vm.toggleSurfaceHidden("w1")
+        assertEquals(setOf("w2"), vm.hiddenSurfaceIds.value)
+
+        vm.showAllSurfaces()
+        assertTrue(vm.hiddenSurfaceIds.value.isEmpty())
+    }
+
+    @Test
+    fun floorsCannotBeHidden() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createFloorSurface("f1"))
+        vm.loadSurfaces("r1")
+
+        vm.toggleSurfaceHidden("f1")
+        vm.toggleSurfaceHidden("unknown")
+
+        assertTrue(vm.hiddenSurfaceIds.value.isEmpty())
+    }
+
+    @Test
+    fun reloadingSurfacesDropsHiddenIdsThatNoLongerExist() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createWallSurface("w2")))
+        vm.loadSurfaces("r1")
+        vm.toggleSurfaceHidden("w1")
+        vm.toggleSurfaceHidden("w2")
+
+        surfaceRepo.delete("w1")
+        vm.loadSurfaces("r1")
+
+        assertEquals(setOf("w2"), vm.hiddenSurfaceIds.value)
+    }
+
+    // ── 3D Preview Scene Tests ──
+
+    @Test
+    fun loadSurfacesBuildsOneMeshPerSurface() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createFloorSurface("f1")))
+        vm.loadSurfaces("r1")
+
+        val scene = vm.previewScene.value
+        assertEquals(listOf("w1", "f1"), scene.surfaces.map { it.surfaceId })
+        assertTrue(scene.surfaces.all { it.parts.isNotEmpty() })
+    }
+
+    @Test
+    fun computeLayoutAddsTilesToThatSurfaceOnly() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(
+            createWallSurface("w1", width = 903.0, height = 603.0),
+            createWallSurface("w2", width = 903.0, height = 603.0, rotation = 90.0),
+        ))
+        surfaceRepo.stgs.add(createSTG("stg1", "w1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        vm.loadSurfaces("r1")
+        val untouched = vm.previewScene.value.surface("w2")
+
+        vm.computeLayout("w1")
+
+        val scene = vm.previewScene.value
+        val tileParts = scene.surface("w1")!!.parts.filter { it.material is SceneMaterial.Tile }
+        assertEquals(1, tileParts.size)
+        assertEquals("tg1", (tileParts.single().material as SceneMaterial.Tile).tileGroupId)
+        assertSame(untouched, scene.surface("w2"), "Unchanged surfaces keep their mesh instance")
+    }
+
+    @Test
+    fun loadSurfacesUsesStoredLayoutsForEverySurface() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("w1", width = 903.0, height = 603.0))
+        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        layoutRepo.save(LayoutResult(surfaceId = "w1", tiles = listOf(PlacedTile(0.0, 0.0, 300.0, 200.0, tileGroupId = "tg1"))))
+
+        vm.loadSurfaces("r1")
+
+        assertTrue(vm.previewScene.value.surface("w1")!!.parts.any { it.material is SceneMaterial.Tile })
     }
 
     // ── Lock Tests ──
@@ -802,39 +897,35 @@ class RoomEditorViewModelTest {
         assertTrue(vm.cutEntries.value.isNotEmpty(), "onDragEnd computes layout and refreshes cut entries")
     }
 
-    // ── Hit Test Tests ──
+    // ── Pick Tests ──
 
     @Test
-    fun hitTestReturnsSurfaceId() = runTest {
-        setUp()
-        val s1 = Surface(
-            id = "s1", roomId = "r1", type = SurfaceType.WALL,
-            width = 2000.0, height = 1200.0,
-            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
-        )
-        surfaceRepo.surfaces.add(s1)
-        vm.loadSurfaces("r1")
-
-        val canvasW = 800.0
-        val canvasH = 600.0
-        val centerX = canvasW / 2.0
-        val centerY = canvasH * 0.6
-
-        val hitId = vm.hitTest(centerX, centerY, canvasW, canvasH)
-
-        assertNotNull(hitId, "Tap near isometric origin should hit a surface")
-        assertEquals("s1", hitId, "Should hit the correct surface")
-    }
-
-    @Test
-    fun hitTestReturnsNullWhenNoSurfaceHit() = runTest {
+    fun pickSurfaceAtViewCentreHitsTheWall() = runTest {
         setUp()
         surfaceRepo.surfaces.add(createWallSurface("s1"))
         vm.loadSurfaces("r1")
 
-        val hitId = vm.hitTest(-9999.0, -9999.0, 800.0, 600.0)
+        assertEquals("s1", vm.pickSurface(400.0, 300.0, 800.0, 600.0))
+    }
 
-        assertNull(hitId, "Tap far outside should hit nothing")
+    @Test
+    fun pickSurfaceIgnoresHiddenWalls() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+        vm.toggleSurfaceHidden("s1")
+
+        assertNull(vm.pickSurface(400.0, 300.0, 800.0, 600.0))
+    }
+
+    @Test
+    fun pickSurfaceReturnsNullOffTheRoomOrForEmptyViewport() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+
+        assertNull(vm.pickSurface(1.0, 1.0, 800.0, 600.0), "Corner of the view is empty space")
+        assertNull(vm.pickSurface(0.0, 0.0, 0.0, 0.0))
     }
 
     // ── Load Tests ──

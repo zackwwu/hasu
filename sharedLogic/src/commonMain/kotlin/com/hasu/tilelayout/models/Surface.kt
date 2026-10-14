@@ -40,7 +40,8 @@ data class Surface(
     }
 }
 
-private fun normalizedRotation(rotation: Double): Int = ((rotation.toInt() % 360) + 360) % 360
+/** Rotation in whole degrees within [0, 360). */
+internal fun normalizedRotation(rotation: Double): Int = ((rotation.toInt() % 360) + 360) % 360
 
 private fun coordinateName(rotation: Int): String = when (rotation) {
     90 -> "Left Wall"
