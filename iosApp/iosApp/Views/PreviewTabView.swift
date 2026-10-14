@@ -1,115 +1,119 @@
+import SharedLogic
 import SwiftUI
 
-/// 3D preview tab with isometric Canvas, hit testing for surface selection,
-/// rotation controls, and top-down toggle.
+/// 3D preview tab: SceneKit view of the room with orbit / pinch / scroll
+/// camera control, tap-to-select, and per-wall hide/show.
 struct PreviewTabView: View {
     @ObservedObject var vm: IOSRoomEditorViewModel
-    @State private var topDown = false
     @State private var showExportSheet = false
-    @State private var zoomAtGestureStart: Double = 1.0
-    @State private var rotationAtGestureStart: Double = 0.0
+    @State private var showHint = true
+    @State private var rendererHandle = RoomRendererHandle()
+
+    private var walls: [Surface] {
+        vm.surfaces.filter { $0.type == SurfaceType.wall }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
-            // 3D Isometric Canvas
-            GeometryReader { geometry in
-                let canvasSize = geometry.size
-
-                Canvas { context, size in
-                    IsometricCanvas.drawIsometricRoom(
-                        context: &context,
-                        size: size,
-                        surfaces: vm.surfaces,
-                        viewAngle: vm.viewAngle,
-                        selectedSurfaceId: vm.selectedSurfaceId,
-                        zoom: vm.previewZoom,
-                        doorWorldRects: vm.doorWorldRects
-                    )
-                }
-                .contentShape(Rectangle())
-                .onTapGesture { location in
-                    if let id = vm.hitTest(
-                        tapX: location.x,
-                        tapY: location.y,
-                        canvasWidth: canvasSize.width,
-                        canvasHeight: canvasSize.height
-                    ) {
-                        vm.selectSurface(id)
+            ZStack {
+                RoomSceneView(
+                    scene: vm.previewScene,
+                    camera: vm.previewCamera,
+                    hiddenSurfaceIds: vm.hiddenSurfaceIds,
+                    selectedSurfaceId: vm.selectedSurfaceId,
+                    handle: rendererHandle,
+                    onOrbit: { dYaw, dPitch in
+                        showHint = false
+                        vm.orbitPreview(deltaYaw: dYaw, deltaPitch: dPitch)
+                    },
+                    onZoom: { factor in
+                        showHint = false
+                        vm.zoomPreviewBy(factor)
+                    },
+                    onTap: { location, viewport in
+                        if let id = vm.pickSurface(
+                            x: location.x,
+                            y: location.y,
+                            viewportWidth: viewport.width,
+                            viewportHeight: viewport.height
+                        ) {
+                            vm.selectSurface(id)
+                        }
                     }
+                )
+
+                if showHint && !vm.surfaces.isEmpty {
+                    VStack {
+                        Text("Drag to rotate · Pinch to zoom · Tap a wall to select")
+                            .font(.caption)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(.black.opacity(0.55), in: Capsule())
+                            .padding(.top, 12)
+                        Spacer()
+                    }
+                    .allowsHitTesting(false)
                 }
-                .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in
-                            // magnification is cumulative per gesture, starting at 1.0
-                            if value.magnification == 1.0 {
-                                zoomAtGestureStart = vm.previewZoom
-                            }
-                            vm.setPreviewZoom(zoomAtGestureStart * value.magnification)
-                        }
-                )
-                .simultaneousGesture(
-                    RotateGesture()
-                        .onChanged { value in
-                            // rotation is cumulative per gesture, starting at 0
-                            if value.rotation == .zero {
-                                rotationAtGestureStart = Double(vm.viewAngle)
-                            }
-                            // positive rotation = counterclockwise on screen
-                            vm.setViewAngle(rotationAtGestureStart - value.rotation.degrees)
-                        }
-                )
+
+                VStack {
+                    Spacer()
+                    HStack(spacing: 8) {
+                        Spacer()
+                        Button("Top") { vm.orbitPreview(deltaYaw: 0, deltaPitch: 90) }
+                            .accessibilityIdentifier("preview-top")
+                        Button("Reset view") { vm.resetPreviewCamera() }
+                            .accessibilityIdentifier("preview-reset")
+                    }
+                    .font(.caption)
+                    .buttonStyle(.bordered)
+                    .padding(8)
+                }
             }
 
-            Divider()
-
-            // Rotation controls
-            HStack(spacing: 16) {
-                Button {
-                    vm.rotateView(-90)
-                } label: {
-                    Image(systemName: "arrow.counterclockwise")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("rotate-left")
-
-                Text("\(vm.viewAngle)°")
-                    .font(.headline)
-                    .frame(minWidth: 50)
-
-                Button {
-                    vm.rotateView(90)
-                } label: {
-                    Image(systemName: "arrow.clockwise")
-                }
-                .buttonStyle(.bordered)
-                .accessibilityIdentifier("rotate-right")
-
-                Divider()
-                    .frame(height: 24)
-
-                Toggle(isOn: $topDown) {
-                    Text("Top-Down")
+            if let selected = vm.selectedSurface {
+                HStack {
+                    Text("\(selected.displayName()) · \(Int(selected.width))×\(Int(selected.height)) mm")
                         .font(.caption)
-                }
-                .toggleStyle(.switch)
-                .onChange(of: topDown) { _, newValue in
-                    if newValue {
-                        // Set view angle to ~90 degrees for top-down look
-                        vm.rotateView(90 - (vm.viewAngle % 360))
+                    Spacer()
+                    if selected.type == SurfaceType.wall {
+                        let hidden = vm.hiddenSurfaceIds.contains(selected.id)
+                        Button {
+                            vm.toggleSurfaceHidden(selected.id)
+                        } label: {
+                            Label(hidden ? "Show wall" : "Hide wall", systemImage: hidden ? "eye" : "eye.slash")
+                                .font(.caption)
+                        }
                     }
                 }
+                .padding(.horizontal)
+                .padding(.vertical, 6)
+                .background(Color(.secondarySystemBackground))
+            }
 
-                Button {
-                    vm.resetPreviewZoom()
-                } label: {
-                    Text("\(Int(vm.previewZoom * 100))%")
+            if !walls.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Walls")
                         .font(.caption)
-                        .foregroundStyle(vm.previewZoom != 1.0 ? Color.blue : Color.secondary)
+                        .foregroundStyle(.secondary)
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(walls, id: \.id) { wall in
+                                wallChip(wall)
+                            }
+                        }
+                    }
                 }
-                .buttonStyle(.plain)
+                .padding(.horizontal)
+                .padding(.top, 8)
+            }
 
+            HStack {
                 Spacer()
-
+                if !vm.hiddenSurfaceIds.isEmpty {
+                    Button("Show all walls") { vm.showAllSurfaces() }
+                        .font(.caption)
+                }
                 Button {
                     showExportSheet = true
                 } label: {
@@ -120,40 +124,39 @@ struct PreviewTabView: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 10)
-
-            // Surface info for selected
-            if let selected = vm.selectedSurface {
-                HStack {
-                    Text("Selected: \(vm.displayName(for: selected))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Spacer()
-                    Text("Angle: \(Int(selected.position.rotation))°")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .padding(.horizontal)
-                .padding(.bottom, 8)
-            }
         }
         .sheet(isPresented: $showExportSheet) {
             ExportSheetView(title: "Preview") { dpi in
-                ExportService.renderToImage(
-                    content: Canvas { context, size in
-                        IsometricCanvas.drawIsometricRoom(
-                            context: &context,
-                            size: size,
-                            surfaces: vm.surfaces,
-                            viewAngle: vm.viewAngle,
-                            selectedSurfaceId: vm.selectedSurfaceId
-                        )
-                    }
-                    .background(Color.white),
-                    dpi: dpi
-                )
+                let scale = dpi / 72
+                let longest = 1200 * scale
+                let clamp = min(1, Self.maxExportPixels / longest)
+                let size = CGSize(width: 1200 * scale * clamp, height: 900 * scale * clamp)
+                return rendererHandle.snapshot(size: size)
             }
         }
     }
+
+    private func wallChip(_ wall: Surface) -> some View {
+        let visible = !vm.hiddenSurfaceIds.contains(wall.id)
+        return Button {
+            vm.toggleSurfaceHidden(wall.id)
+        } label: {
+            Label(wall.displayName(), systemImage: visible ? "eye" : "eye.slash")
+                .font(.caption)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(
+                    visible ? Color.accentColor.opacity(0.15) : Color(.tertiarySystemFill),
+                    in: Capsule()
+                )
+                .foregroundStyle(visible ? Color.accentColor : Color.secondary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityIdentifier("wall-chip-\(wall.id)")
+        .accessibilityValue(visible ? "Visible" : "Hidden")
+    }
+
+    private static let maxExportPixels: CGFloat = 4096
 }
 
 #Preview {
