@@ -9,6 +9,11 @@ import kotlin.math.max
  * [MeshPart.vertexShades]) and draw unlit, so faces shade identically on
  * Android and iOS and no per-pixel lighting runs on the GPU.
  * Intensities sum to < 1 so a fully lit face never clips its albedo.
+ *
+ * [shade] is a linear-light factor: renderers multiply it with *linear*
+ * albedo and encode to sRGB on output (Filament converts sRGB colours and
+ * textures explicitly; SceneKit does so via its default linear-space
+ * rendering). Multiplying sRGB-encoded values instead would darken faces.
  */
 object SceneLighting {
     const val AMBIENT = 0.58

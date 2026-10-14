@@ -318,6 +318,8 @@ Shared code computes all tile rects, cut annotations, and dimension labels as da
 
 ### 3D Isometric View
 
+> **Superseded:** the isometric view was replaced by a real 3D preview — Filament on Android, SceneKit on iOS, fed by the shared `com.hasu.tilelayout.scene` module (`RoomSceneBuilder`, `OrbitCamera`, `ScenePicker`). It supports free orbit, pinch/scroll zoom, a Top plan view, tap-to-select via ray picking and per-wall hide/show. The text below documents the original design.
+
 No 3D engine. Isometric projection computed in shared Kotlin math:
 
 ```
