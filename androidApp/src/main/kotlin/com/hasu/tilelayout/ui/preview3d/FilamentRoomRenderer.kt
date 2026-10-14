@@ -38,17 +38,22 @@ import com.hasu.tilelayout.scene.SceneColors
 import com.hasu.tilelayout.scene.SceneLighting
 import com.hasu.tilelayout.scene.SceneMaterial
 import com.hasu.tilelayout.scene.SurfaceMesh
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.Buffer
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
-import kotlin.coroutines.resume
 import kotlin.math.floor
 import kotlin.math.ln
 import kotlin.math.max
@@ -102,6 +107,8 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
     private val surfaces = linkedMapOf<String, GpuSurface>()
     private val textures = mutableMapOf<String, Texture>()
     private val loadingTextures = mutableSetOf<String>()
+    private val captureMutex = Mutex()
+    private var pendingCapture: PendingCapture? = null
 
     private class GpuPart(
         val entity: Int,
@@ -115,6 +122,18 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
 
     private class GpuSurface(val mesh: SurfaceMesh, val parts: List<GpuPart>) {
         var visible = false
+    }
+
+    /** Offscreen resources of one export, alive until Filament has finished reading them back. */
+    private class PendingCapture(
+        val view: View,
+        val cameraEntity: Int,
+        val target: RenderTarget,
+        val color: Texture,
+        val depth: Texture,
+    ) {
+        val done = CompletableDeferred<Boolean>()
+        var released = false
     }
 
     private val frameCallback = Choreographer.FrameCallback { frameTimeNanos ->
@@ -168,6 +187,7 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         for (mesh in newScene.surfaces) {
             if (mesh.surfaceId !in surfaces) surfaces[mesh.surfaceId] = createSurface(mesh)
         }
+        releaseUnusedTextures()
         applyVisibility()
         applySelection(selectedId)
         if (boundsChanged) updateCamera()
@@ -198,10 +218,19 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
     /**
      * Render the current view offscreen at [width]×[height] for export, without
      * the selection highlight. The camera keeps its orbit but adapts to the
-     * export aspect ratio.
+     * export aspect ratio. Captures run one at a time; cancelling the caller
+     * abandons the result but never frees the offscreen target while Filament
+     * may still be reading it back.
      */
-    suspend fun capture(width: Int, height: Int): Bitmap? {
-        if (destroyed || width <= 0 || height <= 0) return null
+    suspend fun capture(width: Int, height: Int): Bitmap? = captureMutex.withLock {
+        if (destroyed || width <= 0 || height <= 0) return@withLock null
+        val pixels = withContext(NonCancellable) { renderOffscreen(width, height) } ?: return@withLock null
+        currentCoroutineContext().ensureActive()
+        withContext(Dispatchers.Default) { pixelsToBitmap(pixels, width, height) }
+    }
+
+    private suspend fun renderOffscreen(width: Int, height: Int): ByteBuffer? {
+        if (destroyed) return null
         val color = Texture.Builder()
             .width(width).height(height).levels(1)
             .usage(Texture.Usage.COLOR_ATTACHMENT or Texture.Usage.SAMPLEABLE or Texture.Usage.BLIT_SRC)
@@ -225,32 +254,46 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
             it.viewport = Viewport(0, 0, width, height)
             it.renderTarget = target
         }
+        val capture = PendingCapture(captureView, captureEntity, target, color, depth)
+        pendingCapture = capture
 
         val pixels = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.nativeOrder())
+        // Material parameters are committed when the view is rendered, so the
+        // live highlight can come back before the next on-screen frame.
         applySelection(null)
-        try {
-            renderer.renderStandaloneView(captureView)
-            suspendCancellableCoroutine { cont ->
-                renderer.readPixels(
-                    target, 0, 0, width, height,
-                    Texture.PixelBufferDescriptor(
-                        pixels, Texture.Format.RGBA, Texture.Type.UBYTE,
-                        1, 0, 0, 0, mainHandler,
-                    ) { if (cont.isActive) cont.resume(Unit) },
-                )
-                engine.flush()
-            }
-        } finally {
-            applySelection(selectedId)
-            engine.destroyView(captureView)
-            engine.destroyCameraComponent(captureEntity)
-            EntityManager.get().destroy(captureEntity)
-            engine.destroyRenderTarget(target)
-            engine.destroyTexture(color)
-            engine.destroyTexture(depth)
-            requestFrame()
+        renderer.renderStandaloneView(captureView)
+        applySelection(selectedId)
+        renderer.readPixels(
+            target, 0, 0, width, height,
+            Texture.PixelBufferDescriptor(
+                pixels, Texture.Format.RGBA, Texture.Type.UBYTE,
+                1, 0, 0, 0, mainHandler,
+            ) { capture.done.complete(true) },
+        )
+        engine.flush()
+        // Filament dispatches the read-back callback from later frames, so keep them coming until it lands
+        requestFrame()
+
+        val completed = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) { capture.done.await() } ?: false
+        if (!capture.released) {
+            // Without the callback the GPU may still be busy with the target: wait before freeing it
+            if (!completed) engine.flushAndWait()
+            releaseCapture(capture)
         }
-        return withContext(Dispatchers.Default) { pixelsToBitmap(pixels, width, height) }
+        if (pendingCapture === capture) pendingCapture = null
+        requestFrame()
+        return if (completed) pixels else null
+    }
+
+    private fun releaseCapture(capture: PendingCapture) {
+        if (capture.released) return
+        capture.released = true
+        engine.destroyView(capture.view)
+        engine.destroyCameraComponent(capture.cameraEntity)
+        EntityManager.get().destroy(capture.cameraEntity)
+        engine.destroyRenderTarget(capture.target)
+        engine.destroyTexture(capture.color)
+        engine.destroyTexture(capture.depth)
     }
 
     fun destroy() {
@@ -258,6 +301,12 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         destroyed = true
         choreographer.removeFrameCallback(frameCallback)
         textureScope.cancel()
+        pendingCapture?.let { capture ->
+            capture.done.complete(false)
+            engine.flushAndWait()
+            releaseCapture(capture)
+        }
+        pendingCapture = null
         uiHelper.detach()
         surfaces.values.forEach(::destroySurface)
         surfaces.clear()
@@ -290,6 +339,7 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         if (renderer.beginFrame(target, frameTimeNanos)) {
             renderer.render(view)
             renderer.endFrame()
+            if (pendingCapture != null) requestFrame()
         } else {
             // Filament skipped this vsync to keep pace with the GPU; try again on the next one
             requestFrame()
@@ -446,11 +496,25 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
             val bitmap = withContext(Dispatchers.IO) { decodeTexture(path) }
             loadingTextures.remove(path)
             if (destroyed || bitmap == null) return@launch
+            if (path !in usedTexturePaths()) {
+                bitmap.recycle()
+                return@launch
+            }
             val texture = uploadTexture(bitmap)
             textures[path] = texture
             swapInTexture(path, texture)
             requestFrame()
         }
+    }
+
+    private fun usedTexturePaths(): Set<String> =
+        surfaces.values.flatMapTo(mutableSetOf()) { gpu -> gpu.parts.mapNotNull { texturePath(it.sceneMaterial) } }
+
+    /** Free textures no remaining part samples, e.g. after a tile group's image was replaced. */
+    private fun releaseUnusedTextures() {
+        val used = usedTexturePaths()
+        val unused = textures.keys.filter { it !in used }
+        for (path in unused) textures.remove(path)?.let(engine::destroyTexture)
     }
 
     /** Give every untextured part that is waiting on [path] a textured material. */
@@ -486,6 +550,9 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         init {
             Gltfio.init()
         }
+
+        /** Upper bound on waiting for an export read-back (e.g. while the surface is detached and no frames run). */
+        private const val CAPTURE_TIMEOUT_MS = 5_000L
 
         /** Longest side of decoded tile textures; tiles are small on screen, so this bounds GPU memory. */
         private const val MAX_TEXTURE_SIZE = 512

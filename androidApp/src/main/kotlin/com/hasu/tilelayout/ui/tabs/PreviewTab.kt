@@ -117,7 +117,7 @@ fun PreviewTab(vm: RoomEditorViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 FilledTonalButton(
-                    onClick = { vm.orbitPreview(0.0, 90.0) },
+                    onClick = { vm.topPreviewCamera() },
                     contentPadding = PaddingValues(horizontal = 12.dp),
                 ) { Text("Top", fontSize = 12.sp) }
                 FilledTonalButton(

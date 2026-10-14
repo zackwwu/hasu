@@ -12,7 +12,6 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.viewinterop.AndroidView
 import com.hasu.tilelayout.scene.OrbitCamera
 import com.hasu.tilelayout.scene.RoomScene
-import kotlin.math.exp
 
 /** Lets UI outside the 3D view (e.g. export) reach the live renderer. */
 class RoomRendererHandle {
@@ -81,13 +80,12 @@ fun Modifier.roomViewGestures(
             while (true) {
                 val event = awaitPointerEvent()
                 if (event.type != PointerEventType.Scroll) continue
+                // Compose reports one unit per wheel notch, positive when rolled towards the user
                 val scroll = event.changes.sumOf { it.scrollDelta.y.toDouble() }
                 if (scroll != 0.0) {
-                    onZoom(exp(-scroll * SCROLL_ZOOM_RATE))
+                    onZoom(OrbitCamera.zoomFactorForScroll(scroll))
                     event.changes.forEach { it.consume() }
                 }
             }
         }
     }
-
-private const val SCROLL_ZOOM_RATE = 0.15
