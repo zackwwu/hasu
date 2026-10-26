@@ -108,7 +108,8 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
     private val textures = mutableMapOf<String, Texture>()
     private val loadingTextures = mutableSetOf<String>()
     private val captureMutex = Mutex()
-    private var pendingCapture: PendingCapture? = null
+    /** Captures whose read-back callback has not run yet, including ones the caller stopped waiting for. */
+    private val pendingCaptures = mutableSetOf<PendingCapture>()
 
     private class GpuPart(
         val entity: Int,
@@ -132,7 +133,11 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         val color: Texture,
         val depth: Texture,
     ) {
-        val done = CompletableDeferred<Boolean>()
+        /** Completed on the main thread by the read-back callback, or by [destroy]. */
+        val done = CompletableDeferred<Unit>()
+        var readBack = false
+        /** The caller timed out; the callback frees the resources when it finally runs. */
+        var abandoned = false
         var released = false
     }
 
@@ -255,7 +260,7 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
             it.renderTarget = target
         }
         val capture = PendingCapture(captureView, captureEntity, target, color, depth)
-        pendingCapture = capture
+        pendingCaptures += capture
 
         val pixels = ByteBuffer.allocateDirect(width * height * 4).order(ByteOrder.nativeOrder())
         // Material parameters are committed when the view is rendered, so the
@@ -268,21 +273,36 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
             Texture.PixelBufferDescriptor(
                 pixels, Texture.Format.RGBA, Texture.Type.UBYTE,
                 1, 0, 0, 0, mainHandler,
-            ) { capture.done.complete(true) },
+            ) { onReadBack(capture) },
         )
         engine.flush()
         // Filament dispatches the read-back callback from later frames, so keep them coming until it lands
         requestFrame()
 
-        val completed = withTimeoutOrNull(CAPTURE_TIMEOUT_MS) { capture.done.await() } ?: false
-        if (!capture.released) {
-            // Without the callback the GPU may still be busy with the target: wait before freeing it
-            if (!completed) engine.flushAndWait()
-            releaseCapture(capture)
+        // Suspends without blocking the main thread. The callback also runs on the main thread, so
+        // it either completed `done` before this resumes (even if the timeout fired first) or it
+        // runs afterwards and sees `abandoned`; there is no window where both miss each other.
+        withTimeoutOrNull(CAPTURE_TIMEOUT_MS) { capture.done.await() }
+        if (capture.done.isCompleted) {
+            finishCapture(capture)
+        } else {
+            // Filament may still write into the target: keep it until the callback (or destroy) frees it
+            capture.abandoned = true
         }
-        if (pendingCapture === capture) pendingCapture = null
         requestFrame()
-        return if (completed) pixels else null
+        return if (capture.readBack) pixels else null
+    }
+
+    private fun onReadBack(capture: PendingCapture) {
+        if (capture.released) return
+        capture.readBack = true
+        capture.done.complete(Unit)
+        if (capture.abandoned) finishCapture(capture)
+    }
+
+    private fun finishCapture(capture: PendingCapture) {
+        pendingCaptures -= capture
+        releaseCapture(capture)
     }
 
     private fun releaseCapture(capture: PendingCapture) {
@@ -301,12 +321,12 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         destroyed = true
         choreographer.removeFrameCallback(frameCallback)
         textureScope.cancel()
-        pendingCapture?.let { capture ->
-            capture.done.complete(false)
-            engine.flushAndWait()
-            releaseCapture(capture)
+        // Destruction is queued behind any in-flight read-back, and engine.destroy() drains the
+        // queue, so pending targets can be released without waiting for their callbacks.
+        for (capture in pendingCaptures.toList()) {
+            capture.done.complete(Unit)
+            finishCapture(capture)
         }
-        pendingCapture = null
         uiHelper.detach()
         surfaces.values.forEach(::destroySurface)
         surfaces.clear()
@@ -339,7 +359,7 @@ class FilamentRoomRenderer(private val surfaceView: SurfaceView) {
         if (renderer.beginFrame(target, frameTimeNanos)) {
             renderer.render(view)
             renderer.endFrame()
-            if (pendingCapture != null) requestFrame()
+            if (pendingCaptures.isNotEmpty()) requestFrame()
         } else {
             // Filament skipped this vsync to keep pace with the GPU; try again on the next one
             requestFrame()
