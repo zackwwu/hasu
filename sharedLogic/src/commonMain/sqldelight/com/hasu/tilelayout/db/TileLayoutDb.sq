@@ -65,6 +65,7 @@ CREATE TABLE layout_results (
     surface_id TEXT NOT NULL,
     computed_at INTEGER NOT NULL,
     stale INTEGER NOT NULL DEFAULT 1,
+    door_convention INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY (surface_id) REFERENCES surfaces(id) ON DELETE CASCADE
 );
 
@@ -176,7 +177,7 @@ getLayoutResultBySurface:
 SELECT * FROM layout_results WHERE surface_id = ?;
 
 insertLayoutResult:
-INSERT OR REPLACE INTO layout_results(id, surface_id, computed_at, stale) VALUES (?, ?, ?, ?);
+INSERT OR REPLACE INTO layout_results(id, surface_id, computed_at, stale, door_convention) VALUES (?, ?, ?, ?, ?);
 
 deleteLayoutResult:
 DELETE FROM layout_results WHERE id = ?;

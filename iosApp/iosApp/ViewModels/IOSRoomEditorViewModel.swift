@@ -10,15 +10,14 @@ import SharedLogic
 final class IOSRoomEditorViewModel: ObservableObject {
     @Published var surfaces: [Surface] = []
     @Published var selectedSurfaceId: String? = nil
-    @Published var viewAngle: Int = 0
-    @Published var previewZoom: Double = 1.0
+    @Published var previewCamera = OrbitCamera(yawDegrees: OrbitCamera.companion.DEFAULT_YAW, pitchDegrees: OrbitCamera.companion.DEFAULT_PITCH, zoom: 1.0)
+    @Published var hiddenSurfaceIds: Set<String> = []
+    @Published var previewScene: RoomScene = RoomScene.companion.EMPTY
     @Published var lockedSurfaceIds: Set<String> = []
     @Published var hasUndoBuffer = false
     @Published var currentTiles: [PlacedTile] = []
     @Published var cutEntries: [CutEntry] = []
     @Published var isDragging = false
-    /// surfaceId → door world-space corners (x, y up, z), for the 3D preview.
-    @Published var doorWorldRects: [String: [SIMD3<Double>]] = [:]
     /// surfaceId → door surface-local rect, for the 2D layout tab.
     @Published var doorLocalRects: [String: RegionRect] = [:]
 
@@ -64,38 +63,41 @@ final class IOSRoomEditorViewModel: ObservableObject {
         }
     }
 
-    func rotateView(_ delta: Int) {
-        sharedVM.rotateView(delta: Int32(delta))
-        refresh()
+    // MARK: - 3D preview
+
+    func orbitPreview(deltaYaw: Double, deltaPitch: Double) {
+        sharedVM.orbitPreview(deltaYawDegrees: deltaYaw, deltaPitchDegrees: deltaPitch)
+        refreshPreviewCamera()
     }
 
-    func rotateViewBy(_ deltaDegrees: Double) {
-        sharedVM.rotateViewBy(deltaDegrees: deltaDegrees)
-        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
-            viewAngle = kotlinInt.intValue
-        }
-    }
-
-    func setViewAngle(_ angle: Double) {
-        sharedVM.setViewAngle(angle: angle)
-        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
-            viewAngle = kotlinInt.intValue
-        }
+    func topPreviewCamera() {
+        sharedVM.topPreviewCamera()
+        refreshPreviewCamera()
     }
 
     func zoomPreviewBy(_ factor: Double) {
         sharedVM.zoomPreviewBy(factor: factor)
-        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+        refreshPreviewCamera()
     }
 
-    func setPreviewZoom(_ zoom: Double) {
-        sharedVM.setPreviewZoom(zoom: zoom)
-        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
+    func resetPreviewCamera() {
+        sharedVM.resetPreviewCamera()
+        refreshPreviewCamera()
     }
 
-    func resetPreviewZoom() {
-        sharedVM.resetPreviewZoom()
-        previewZoom = 1.0
+    func toggleSurfaceHidden(_ id: String) {
+        sharedVM.toggleSurfaceHidden(surfaceId: id)
+        refreshHiddenSurfaces()
+    }
+
+    func showAllSurfaces() {
+        sharedVM.showAllSurfaces()
+        refreshHiddenSurfaces()
+    }
+
+    /// Surface under a point of the 3D view (any unit, as long as the viewport size uses the same one).
+    func pickSurface(x: Double, y: Double, viewportWidth: Double, viewportHeight: Double) -> String? {
+        sharedVM.pickSurface(x: x, y: y, viewportWidth: viewportWidth, viewportHeight: viewportHeight)
     }
 
     func toggleLock(_ id: String) {
@@ -141,15 +143,6 @@ final class IOSRoomEditorViewModel: ObservableObject {
         } catch {
             print("undo failed: \(error)")
         }
-    }
-
-    func hitTest(tapX: Double, tapY: Double, canvasWidth: Double, canvasHeight: Double) -> String? {
-        return sharedVM.hitTest(
-            tapX: tapX,
-            tapY: tapY,
-            canvasWidth: canvasWidth,
-            canvasHeight: canvasHeight
-        )
     }
 
     func loadRoom(projectId: String) async -> [Room] {
@@ -213,21 +206,25 @@ final class IOSRoomEditorViewModel: ObservableObject {
     private func refresh() {
         surfaces = sharedVM.surfaces.value as? [Surface] ?? []
         selectedSurfaceId = sharedVM.selectedSurfaceId.value as? String
-        if let kotlinInt = sharedVM.viewAngle.value as? NSNumber {
-            viewAngle = kotlinInt.intValue
+        refreshPreviewCamera()
+        refreshHiddenSurfaces()
+        if let scene = sharedVM.previewScene.value as? RoomScene, scene !== previewScene {
+            previewScene = scene
         }
-        previewZoom = (sharedVM.previewZoom.value as? NSNumber)?.doubleValue ?? 1.0
         lockedSurfaceIds = Set((sharedVM.lockedSurfaceIds.value as? Set<AnyHashable>)?.compactMap { $0 as? String } ?? [])
         currentTiles = sharedVM.currentTiles.value as? [PlacedTile] ?? []
         cutEntries = sharedVM.cutEntries.value as? [CutEntry] ?? []
         hasUndoBuffer = sharedVM.undoBuffer.value != nil
         doorLocalRects = sharedVM.doorLocalRects.value as? [String: RegionRect] ?? [:]
-        if let worldMap = sharedVM.doorWorldRects.value as? [String: [WorldPoint]] {
-            doorWorldRects = worldMap.mapValues { list in
-                list.map { SIMD3($0.x, $0.y, $0.z) }
-            }
-        } else {
-            doorWorldRects = [:]
+    }
+
+    private func refreshPreviewCamera() {
+        if let camera = sharedVM.previewCamera.value as? OrbitCamera {
+            previewCamera = camera
         }
+    }
+
+    private func refreshHiddenSurfaces() {
+        hiddenSurfaceIds = Set((sharedVM.hiddenSurfaceIds.value as? Set<AnyHashable>)?.compactMap { $0 as? String } ?? [])
     }
 }

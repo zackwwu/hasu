@@ -8,12 +8,9 @@ import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
 import androidx.core.content.FileProvider
-import com.hasu.tilelayout.engine.IsometricProjection
 import com.hasu.tilelayout.models.CutEdge
 import com.hasu.tilelayout.models.GroutColor
 import com.hasu.tilelayout.models.PlacedTile
-import com.hasu.tilelayout.models.Surface
-import com.hasu.tilelayout.models.SurfaceType
 import java.io.File
 import java.io.FileOutputStream
 
@@ -112,14 +109,6 @@ fun GroutColor.toArgb(): Int = when (this) {
     GroutColor.WHITE -> android.graphics.Color.WHITE
 }
 
-// Shade an RGB color by a 0..1 light factor for isometric face shading
-private fun shadedArgb(r: Int, g: Int, b: Int, factor: Float): Int =
-    android.graphics.Color.rgb(
-        (r * factor).toInt().coerceIn(0, 255),
-        (g * factor).toInt().coerceIn(0, 255),
-        (b * factor).toInt().coerceIn(0, 255),
-    )
-
 /**
  * Mirrors [com.hasu.tilelayout.ui.canvas.drawTiles] using android.graphics.Canvas
  * so the 2D layout can be rendered offscreen to a Bitmap for export.
@@ -167,58 +156,5 @@ fun drawTilesToCanvas(
                 CutEdge.BOTTOM -> canvas.drawLine(x, y + h, x + w, y + h, linePaint)
             }
         }
-    }
-}
-
-/**
- * Mirrors [com.hasu.tilelayout.ui.canvas.drawIsometricRoom] using
- * android.graphics.Canvas so the 3D preview can be rendered offscreen.
- */
-fun drawIsometricRoomToCanvas(
-    canvas: android.graphics.Canvas,
-    surfaces: List<Surface>,
-    viewAngle: Int,
-    selectedSurfaceId: String?,
-    widthPx: Float,
-    heightPx: Float,
-) {
-    val fit = IsometricProjection.fitViewport(
-        surfaces, viewAngle, widthPx.toDouble(), heightPx.toDouble(),
-    )
-    val ordered = IsometricProjection.orderSurfaces(surfaces, viewAngle)
-
-    val fillPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.FILL
-    }
-    val strokePaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
-        style = android.graphics.Paint.Style.STROKE
-        strokeWidth = 1.5f
-        color = android.graphics.Color.GRAY
-    }
-
-    for (surface in ordered) {
-        val corners = IsometricProjection.projectSurfaceCorners(
-            surface, viewAngle, fit.originX, fit.originY, fit.scale
-        )
-        val path = android.graphics.Path().apply {
-            moveTo(corners[0].x.toFloat(), corners[0].y.toFloat())
-            for (i in 1 until corners.size) {
-                lineTo(corners[i].x.toFloat(), corners[i].y.toFloat())
-            }
-            close()
-        }
-
-        val isSelected = surface.id == selectedSurfaceId
-        val isWall = surface.type == SurfaceType.WALL
-
-        val light = IsometricProjection.faceLightFactor(surface, viewAngle).toFloat()
-        val fillColor = when {
-            isSelected -> 0x5500BCD4  // cyan highlight
-            isWall -> shadedArgb(0xE8, 0xE0, 0xD8, light)
-            else -> shadedArgb(0xD4, 0xC8, 0xB8, 0.9f + 0.1f * light)
-        }
-        fillPaint.color = fillColor
-        canvas.drawPath(path, fillPaint)
-        canvas.drawPath(path, strokePaint)
     }
 }

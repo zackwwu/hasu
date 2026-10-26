@@ -4,6 +4,8 @@
 
 **Goal:** Build a Kotlin Multiplatform mobile app for tilers to design tile layouts, capture textures, render 2D/3D previews, and generate cut lists. Shared Kotlin logic + SwiftUI (iOS) + Jetpack Compose (Android).
 
+> **Note:** the isometric 3D preview planned here (`IsometricProjection`, `IsometricCanvas`, `hitTest`, `viewAngle`, `doorWorldRects`) has since been replaced by a real 3D preview built on the shared `com.hasu.tilelayout.scene` module (Filament on Android, SceneKit on iOS). The tasks below are kept as a historical record; do not reintroduce those APIs.
+
 **Architecture:** KMP shared module contains all business logic (models, SQLDelight storage, layout engine, render data computation, cut list generator). iOS and Android modules are thin UI layers — they observe shared StateFlows and draw via platform Canvas APIs.
 
 **Tech Stack:** Kotlin Multiplatform, SQLDelight, kotlinx-coroutines, SwiftUI + Canvas, Jetpack Compose + Canvas

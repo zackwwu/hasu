@@ -7,9 +7,7 @@ import com.hasu.tilelayout.db.RoomRepository
 import com.hasu.tilelayout.db.SurfaceRepository
 import com.hasu.tilelayout.db.TileGroupRepository
 import com.hasu.tilelayout.engine.DoorGeometry
-import com.hasu.tilelayout.engine.IsometricProjection
 import com.hasu.tilelayout.engine.LayoutEngine
-import com.hasu.tilelayout.engine.WorldPoint
 import com.hasu.tilelayout.models.CutEntry
 import com.hasu.tilelayout.models.LayoutResult
 import com.hasu.tilelayout.models.PlacedTile
@@ -18,12 +16,19 @@ import com.hasu.tilelayout.models.RegionRect
 import com.hasu.tilelayout.models.Surface
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
+import com.hasu.tilelayout.scene.OrbitCamera
+import com.hasu.tilelayout.scene.PickTarget
+import com.hasu.tilelayout.scene.RoomScene
+import com.hasu.tilelayout.scene.RoomSceneBuilder
+import com.hasu.tilelayout.scene.ScenePicker
+import com.hasu.tilelayout.scene.SurfaceSceneInput
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -73,30 +78,49 @@ class RoomEditorViewModel(
     private val _selectedSurfaceId = MutableStateFlow<String?>(null)
     val selectedSurfaceId: StateFlow<String?> = _selectedSurfaceId
 
-    private val _viewAngle = MutableStateFlow(0)
-    val viewAngle: StateFlow<Int> = _viewAngle
+    // -- 3D preview state (transient, not persisted) --
 
-    /** Pinch-zoom multiplier for the 3D preview (1.0 = fit-to-canvas). Transient, not persisted. */
-    private val _previewZoom = MutableStateFlow(1.0)
-    val previewZoom: StateFlow<Double> = _previewZoom
+    private val _previewCamera = MutableStateFlow(OrbitCamera())
+    val previewCamera: StateFlow<OrbitCamera> = _previewCamera
+
+    /** Walls hidden in the 3D preview so the user can see inside the room. */
+    private val _hiddenSurfaceIds = MutableStateFlow<Set<String>>(emptySet())
+    val hiddenSurfaceIds: StateFlow<Set<String>> = _hiddenSurfaceIds
+
+    /** Meshes for every loaded surface, rebuilt per surface whenever its layout changes. */
+    private val _previewScene = MutableStateFlow(RoomScene.EMPTY)
+    val previewScene: StateFlow<RoomScene> = _previewScene
+
+    fun orbitPreview(deltaYawDegrees: Double, deltaPitchDegrees: Double) {
+        _previewCamera.update { it.orbitBy(deltaYawDegrees, deltaPitchDegrees) }
+    }
 
     fun zoomPreviewBy(factor: Double) {
-        val zoomed = (_previewZoom.value * factor).coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
-        _previewZoom.value = zoomed
+        _previewCamera.update { it.zoomBy(factor) }
     }
 
-    fun setPreviewZoom(zoom: Double) {
-        _previewZoom.value = zoom.coerceIn(MIN_PREVIEW_ZOOM, MAX_PREVIEW_ZOOM)
+    fun resetPreviewCamera() {
+        _previewCamera.value = OrbitCamera()
     }
 
-    fun resetPreviewZoom() {
-        _previewZoom.value = 1.0
+    /** Straight-down plan view (see [OrbitCamera.top]). */
+    fun topPreviewCamera() {
+        _previewCamera.update { it.top() }
+    }
+
+    /** Hide or show a wall in the 3D preview. Floors always stay visible. */
+    fun toggleSurfaceHidden(surfaceId: String) {
+        val surface = _surfaces.value.find { it.id == surfaceId } ?: return
+        if (surface.type != SurfaceType.WALL) return
+        _hiddenSurfaceIds.update { if (surfaceId in it) it - surfaceId else it + surfaceId }
+    }
+
+    fun showAllSurfaces() {
+        _hiddenSurfaceIds.value = emptySet()
     }
 
     companion object {
         const val LAYOUT_DEBOUNCE_MS = 100L
-        const val MIN_PREVIEW_ZOOM = 0.5
-        const val MAX_PREVIEW_ZOOM = 4.0
     }
 
     private val _lockedSurfaceIds = MutableStateFlow<Set<String>>(emptySet())
@@ -110,13 +134,7 @@ class RoomEditorViewModel(
     private val _currentTiles = MutableStateFlow<List<PlacedTile>>(emptyList())
     val currentTiles: StateFlow<List<PlacedTile>> = _currentTiles
 
-    /** surfaceId → door world-space corners, for the 3D preview canvases. */
-    private val _doorWorldRects =
-        MutableStateFlow<Map<String, List<WorldPoint>>>(emptyMap())
-    val doorWorldRects: StateFlow<Map<String, List<WorldPoint>>> =
-        _doorWorldRects
-
-    /** surfaceId → door surface-local rect, for the 2D layout canvases. */
+    /** surfaceId → door surface-local rect, for the 2D layout canvases and the 3D preview. */
     private val _doorLocalRects = MutableStateFlow<Map<String, RegionRect>>(emptyMap())
     val doorLocalRects: StateFlow<Map<String, RegionRect>> = _doorLocalRects
 
@@ -129,27 +147,42 @@ class RoomEditorViewModel(
 
     suspend fun loadSurfaces(roomId: String) {
         _surfaces.value = surfaceRepo.getByRoom(roomId)
+        val ids = _surfaces.value.map { it.id }.toSet()
+        _hiddenSurfaceIds.update { it intersect ids }
         refreshDoorRects(roomId)
+        recomputeLegacyDoorLayouts()
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
         recomputeCutEntries()
+        refreshPreviewScene()
     }
 
-    /** Recompute door rects (world + surface-local) for every loaded surface. */
+    /** Recompute surface-local door rects for every loaded surface. */
     private suspend fun refreshDoorRects(roomId: String) {
         val room = roomRepo.getById(roomId)
         if (room == null) {
-            _doorWorldRects.value = emptyMap()
             _doorLocalRects.value = emptyMap()
             return
         }
-        val worldRects = mutableMapOf<String, List<WorldPoint>>()
         val localRects = mutableMapOf<String, RegionRect>()
         for (surface in _surfaces.value) {
             DoorGeometry.surfaceLocalRect(room, surface)?.let { localRects[surface.id] = it }
-            DoorGeometry.worldCorners(room, surface)?.let { worldRects[surface.id] = it }
         }
         _doorLocalRects.value = localRects
-        _doorWorldRects.value = worldRects
+    }
+
+    /**
+     * Layouts saved before door rects moved to the floor line excluded the door
+     * at the top of the wall, so their gaps and cuts sit in the wrong place even
+     * when no tile covers the new opening. Recompute every such layout once;
+     * the result is saved with the current convention, so layouts saved since
+     * are left untouched. Surfaces that never had a door recompute to the same
+     * tiles, which is cheaper than knowing where a door used to be.
+     */
+    private suspend fun recomputeLegacyDoorLayouts() {
+        for (surface in _surfaces.value) {
+            val saved = layoutRepo.getBySurface(surface.id) ?: continue
+            if (saved.doorConvention < LayoutResult.DOOR_CONVENTION_FLOOR) computeLayout(surface.id)
+        }
     }
 
     suspend fun selectSurface(id: String?) {
@@ -159,20 +192,6 @@ class RoomEditorViewModel(
         } else {
             _currentTiles.value = emptyList()
         }
-    }
-
-    fun rotateView(delta: Int) {
-        _viewAngle.value = ((_viewAngle.value + delta) % 360 + 360) % 360
-    }
-
-    /** Rotate by an arbitrary (non-90-multiple) delta in degrees — for touch gestures. */
-    fun rotateViewBy(deltaDegrees: Double) {
-        _viewAngle.value = (((_viewAngle.value + deltaDegrees).toInt() % 360) + 360) % 360
-    }
-
-    /** Set the view angle to an absolute value in degrees. */
-    fun setViewAngle(angle: Double) {
-        _viewAngle.value = (((angle.toInt() % 360) + 360) % 360)
     }
 
     fun toggleLock(surfaceId: String) {
@@ -369,6 +388,7 @@ class RoomEditorViewModel(
             _currentTiles.value = tiles
         }
         recomputeCutEntries()
+        refreshPreviewScene(surfaceId)
     }
 
     /**
@@ -426,29 +446,52 @@ class RoomEditorViewModel(
         _cutEntries.value = CutListGenerator.generate(resultsBySurface, surfaceNames, tileGroupNames)
     }
 
-    // -- 3D Hit Testing --
+    // -- 3D preview --
 
-    fun hitTest(
-        tapX: Double,
-        tapY: Double,
-        canvasWidth: Double,
-        canvasHeight: Double,
+    /**
+     * Visible surface under a viewport point (pixels, origin top-left), using
+     * the same camera pose the renderers derive from [previewCamera] and the
+     * scene bounds.
+     */
+    fun pickSurface(
+        x: Double,
+        y: Double,
+        viewportWidth: Double,
+        viewportHeight: Double,
     ): String? {
-        val fit = IsometricProjection.fitViewport(
-            _surfaces.value, _viewAngle.value, canvasWidth, canvasHeight,
-        )
-        val scale = fit.scale * _previewZoom.value
+        if (viewportWidth <= 0 || viewportHeight <= 0) return null
+        val pose = _previewCamera.value.pose(_previewScene.value.bounds, viewportWidth / viewportHeight)
+        val ray = pose.rayThrough(x, y, viewportWidth, viewportHeight)
+        val hidden = _hiddenSurfaceIds.value
+        val doors = _doorLocalRects.value
+        val targets = _surfaces.value
+            .filter { it.id !in hidden }
+            .map { PickTarget(it, doors[it.id]) }
+        return ScenePicker.pick(ray, targets)
+    }
 
-        val ordered = IsometricProjection.orderSurfaces(_surfaces.value, _viewAngle.value)
-        for (surface in ordered.reversed()) {
-            val corners = IsometricProjection.projectSurfaceCorners(
-                surface, _viewAngle.value, fit.originX, fit.originY, scale,
-            )
-            if (IsometricProjection.pointInPolygon(tapX, tapY, corners)) {
-                return surface.id
+    /** Rebuild the preview meshes for [surfaceId], or for every surface when null. */
+    private suspend fun refreshPreviewScene(surfaceId: String? = null) {
+        val surfaces = _surfaces.value
+        val doors = _doorLocalRects.value
+        val inputs = surfaces
+            .filter { surfaceId == null || it.id == surfaceId }
+            .map { surface ->
+                val tiles = layoutRepo.getBySurface(surface.id)?.tiles.orEmpty()
+                val groups = tiles.map { it.tileGroupId }.distinct()
+                    .mapNotNull { tileGroupRepo.getById(it) }
+                    .associateBy { it.id }
+                SurfaceSceneInput(surface, tiles, groups, doors[surface.id])
             }
-        }
-        return null
+        val rebuilt = withContext(Dispatchers.Default) {
+            inputs.map(RoomSceneBuilder::buildSurface)
+        }.associateBy { it.surfaceId }
+
+        val previous = if (surfaceId == null) emptyMap()
+        else _previewScene.value.surfaces.associateBy { it.surfaceId }
+        _previewScene.value = RoomScene(
+            _surfaces.value.mapNotNull { rebuilt[it.id] ?: previous[it.id] }
+        )
     }
 }
 

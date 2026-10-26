@@ -4,6 +4,8 @@ import com.hasu.tilelayout.db.LayoutResultRepository
 import com.hasu.tilelayout.db.RoomRepository
 import com.hasu.tilelayout.db.SurfaceRepository
 import com.hasu.tilelayout.db.TileGroupRepository
+import com.hasu.tilelayout.engine.DoorGeometry
+import com.hasu.tilelayout.models.CutEdge
 import com.hasu.tilelayout.models.GroutColor
 import com.hasu.tilelayout.models.LayoutResult
 import com.hasu.tilelayout.models.PlacedTile
@@ -15,6 +17,8 @@ import com.hasu.tilelayout.models.SurfaceTileGroup
 import com.hasu.tilelayout.models.SurfaceType
 import com.hasu.tilelayout.models.TileGroup
 import com.hasu.tilelayout.models.TilePattern
+import com.hasu.tilelayout.scene.OrbitCamera
+import com.hasu.tilelayout.scene.SceneMaterial
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -98,17 +102,19 @@ class RoomEditorViewModelTest {
 
     // ── Helpers ──
 
+    private lateinit var roomRepo: FakeRoomRepository
     private lateinit var surfaceRepo: FakeSurfaceRepository
     private lateinit var tileGroupRepo: FakeTileGroupRepository
     private lateinit var layoutRepo: FakeLayoutResultRepository
     private lateinit var vm: RoomEditorViewModel
 
     private fun TestScope.setUp(debounceMs: Long = 0L) {
+        roomRepo = FakeRoomRepository()
         surfaceRepo = FakeSurfaceRepository()
         tileGroupRepo = FakeTileGroupRepository()
         layoutRepo = FakeLayoutResultRepository()
         vm = RoomEditorViewModel(
-            roomRepo = FakeRoomRepository(),
+            roomRepo = roomRepo,
             surfaceRepo = surfaceRepo,
             tileGroupRepo = tileGroupRepo,
             layoutRepo = layoutRepo,
@@ -193,31 +199,229 @@ class RoomEditorViewModelTest {
         assertTrue(vm.currentTiles.value.isEmpty(), "Deselecting should clear tiles")
     }
 
-    // ── Rotation Tests ──
+    // ── 3D Preview Camera Tests ──
 
     @Test
-    fun rotateViewUpdatesViewAngle() = runTest {
+    fun orbitPreviewRotatesAndClampsCamera() = runTest {
         setUp()
-        assertEquals(0, vm.viewAngle.value)
+        val start = vm.previewCamera.value
+        assertEquals(OrbitCamera(), start)
 
-        vm.rotateView(90)
-        assertEquals(90, vm.viewAngle.value)
+        vm.orbitPreview(30.0, 10.0)
+        assertEquals(start.yawDegrees + 30.0, vm.previewCamera.value.yawDegrees, 1e-9)
+        assertEquals(start.pitchDegrees + 10.0, vm.previewCamera.value.pitchDegrees, 1e-9)
 
-        vm.rotateView(-90)
-        assertEquals(0, vm.viewAngle.value)
-
-        vm.rotateView(360)
-        assertEquals(0, vm.viewAngle.value)
+        vm.orbitPreview(0.0, 1000.0)
+        assertEquals(OrbitCamera.MAX_PITCH, vm.previewCamera.value.pitchDegrees)
     }
 
     @Test
-    fun rotateViewHandlesNegativeAngles() = runTest {
+    fun zoomPreviewByClampsAndResetRestoresDefaults() = runTest {
         setUp()
-        vm.rotateView(-90)
-        assertEquals(270, vm.viewAngle.value)
+        vm.zoomPreviewBy(2.0)
+        assertEquals(2.0, vm.previewCamera.value.zoom, 1e-9)
+        vm.zoomPreviewBy(1000.0)
+        assertEquals(OrbitCamera.MAX_ZOOM, vm.previewCamera.value.zoom)
+        vm.orbitPreview(45.0, 0.0)
 
-        vm.rotateView(-180)
-        assertEquals(90, vm.viewAngle.value)
+        vm.resetPreviewCamera()
+        assertEquals(OrbitCamera(), vm.previewCamera.value)
+    }
+
+    @Test
+    fun topPreviewLooksStraightDownWhateverThePitch() = runTest {
+        setUp()
+        vm.orbitPreview(0.0, -1000.0)
+        vm.zoomPreviewBy(2.0)
+
+        vm.topPreviewCamera()
+        assertEquals(90.0, vm.previewCamera.value.pitchDegrees)
+        assertEquals(2.0, vm.previewCamera.value.zoom, 1e-9)
+
+        vm.topPreviewCamera()
+        assertEquals(90.0, vm.previewCamera.value.pitchDegrees, "Top is idempotent")
+    }
+
+    // ── Door Tests ──
+
+    @Test
+    fun doorRectSitsOnTheFloorLineInLayoutCoordinates() = runTest {
+        setUp()
+        roomRepo.insert(Room(id = "r1", projectId = "p1", name = "Bath", width = 2000.0, depth = 1500.0, height = 1200.0,
+            doorWall = 0.0, doorWidth = 900.0, doorHeight = 1000.0))
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+
+        assertEquals(RegionRect(550.0, 200.0, 900.0, 1000.0), vm.doorLocalRects.value["s1"])
+    }
+
+    private suspend fun seedDoorRoom() {
+        roomRepo.insert(Room(id = "r1", projectId = "p1", name = "Bath", width = 2000.0, depth = 1500.0, height = 1200.0,
+            doorWall = 0.0, doorWidth = 900.0, doorHeight = 1000.0))
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        surfaceRepo.stgs.add(createSTG("stg1", "s1", "tg1"))
+        tileGroupRepo.tileGroups.add(createTileGroup())
+    }
+
+    private fun legacy(vararg tiles: PlacedTile) = LayoutResult(
+        surfaceId = "s1", tiles = tiles.toList(), doorConvention = LayoutResult.DOOR_CONVENTION_CEILING,
+    )
+
+    @Test
+    fun legacyLayoutCoveringTheNewDoorIsRecomputedOnLoad() = runTest {
+        setUp()
+        seedDoorRoom()
+        // Saved while the door was excluded at the top of the layout: tiles fill the floor-side opening
+        layoutRepo.save(legacy(PlacedTile(600.0, 1000.0, 300.0, 200.0, tileGroupId = "tg1")))
+
+        vm.loadSurfaces("r1")
+
+        val door = vm.doorLocalRects.value.getValue("s1")
+        val saved = layoutRepo.getBySurface("s1")!!
+        assertEquals(LayoutResult.DOOR_CONVENTION_FLOOR, saved.doorConvention)
+        assertTrue(saved.tiles.isNotEmpty())
+        assertTrue(saved.tiles.none { door.overlaps(RegionRect(it.x, it.y, it.width, it.height)) })
+        assertTrue(saved.tiles.any { it.y < door.y }, "Tiles above the door are kept")
+    }
+
+    @Test
+    fun legacyLayoutClearOfTheNewDoorIsStillRecomputedOnLoad() = runTest {
+        setUp()
+        seedDoorRoom()
+        // Only a tile beside the old ceiling gap survives; nothing overlaps the new floor-level door
+        val stray = PlacedTile(1700.0, 0.0, 300.0, 200.0, isCut = true, cutEdges = listOf(CutEdge.LEFT), tileGroupId = "tg1")
+        layoutRepo.save(legacy(stray))
+        val door = DoorGeometry.surfaceLocalRect(roomRepo.getById("r1")!!, surfaceRepo.surfaces.single())!!
+        assertFalse(door.overlaps(RegionRect(stray.x, stray.y, stray.width, stray.height)))
+
+        vm.loadSurfaces("r1")
+
+        val saved = layoutRepo.getBySurface("s1")!!
+        assertEquals(LayoutResult.DOOR_CONVENTION_FLOOR, saved.doorConvention)
+        assertTrue(stray !in saved.tiles)
+        assertTrue(saved.tiles.size > 1, "Recomputed against the floor-level door")
+        // The old ceiling gap (x 550–1450, y 0–1000) is tiled again
+        assertTrue(saved.tiles.any { RegionRect(550.0, 0.0, 900.0, 200.0).overlaps(RegionRect(it.x, it.y, it.width, it.height)) })
+    }
+
+    @Test
+    fun legacyLayoutOnAWallWithoutADoorIsRecomputedOnce() = runTest {
+        setUp()
+        seedDoorRoom()
+        surfaceRepo.surfaces.add(createWallSurface("s2", rotation = 90.0))
+        surfaceRepo.stgs.add(createSTG("stg2", "s2", "tg1"))
+        layoutRepo.save(legacy().copy(surfaceId = "s2"))
+
+        vm.loadSurfaces("r1")
+        val first = layoutRepo.getBySurface("s2")!!
+        assertEquals(LayoutResult.DOOR_CONVENTION_FLOOR, first.doorConvention)
+        assertTrue(first.tiles.isNotEmpty())
+
+        vm.loadSurfaces("r1")
+        assertEquals(first.id, layoutRepo.getBySurface("s2")!!.id, "Not recomputed again")
+    }
+
+    @Test
+    fun currentConventionLayoutIsLeftUntouchedOnLoad() = runTest {
+        setUp()
+        seedDoorRoom()
+        val saved = LayoutResult(surfaceId = "s1", tiles = listOf(PlacedTile(0.0, 0.0, 123.0, 45.0, tileGroupId = "tg1")))
+        layoutRepo.save(saved)
+
+        vm.loadSurfaces("r1")
+
+        assertEquals(saved, layoutRepo.getBySurface("s1"))
+    }
+
+    // ── Wall Visibility Tests ──
+
+    @Test
+    fun toggleSurfaceHiddenHidesAndShowsWalls() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createWallSurface("w2", rotation = 90.0)))
+        vm.loadSurfaces("r1")
+
+        vm.toggleSurfaceHidden("w1")
+        vm.toggleSurfaceHidden("w2")
+        assertEquals(setOf("w1", "w2"), vm.hiddenSurfaceIds.value)
+
+        vm.toggleSurfaceHidden("w1")
+        assertEquals(setOf("w2"), vm.hiddenSurfaceIds.value)
+
+        vm.showAllSurfaces()
+        assertTrue(vm.hiddenSurfaceIds.value.isEmpty())
+    }
+
+    @Test
+    fun floorsCannotBeHidden() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createFloorSurface("f1"))
+        vm.loadSurfaces("r1")
+
+        vm.toggleSurfaceHidden("f1")
+        vm.toggleSurfaceHidden("unknown")
+
+        assertTrue(vm.hiddenSurfaceIds.value.isEmpty())
+    }
+
+    @Test
+    fun reloadingSurfacesDropsHiddenIdsThatNoLongerExist() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createWallSurface("w2")))
+        vm.loadSurfaces("r1")
+        vm.toggleSurfaceHidden("w1")
+        vm.toggleSurfaceHidden("w2")
+
+        surfaceRepo.delete("w1")
+        vm.loadSurfaces("r1")
+
+        assertEquals(setOf("w2"), vm.hiddenSurfaceIds.value)
+    }
+
+    // ── 3D Preview Scene Tests ──
+
+    @Test
+    fun loadSurfacesBuildsOneMeshPerSurface() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(createWallSurface("w1"), createFloorSurface("f1")))
+        vm.loadSurfaces("r1")
+
+        val scene = vm.previewScene.value
+        assertEquals(listOf("w1", "f1"), scene.surfaces.map { it.surfaceId })
+        assertTrue(scene.surfaces.all { it.parts.isNotEmpty() })
+    }
+
+    @Test
+    fun computeLayoutAddsTilesToThatSurfaceOnly() = runTest {
+        setUp()
+        surfaceRepo.surfaces.addAll(listOf(
+            createWallSurface("w1", width = 903.0, height = 603.0),
+            createWallSurface("w2", width = 903.0, height = 603.0, rotation = 90.0),
+        ))
+        surfaceRepo.stgs.add(createSTG("stg1", "w1", "tg1", regionW = 903.0, regionH = 603.0))
+        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        vm.loadSurfaces("r1")
+        val untouched = vm.previewScene.value.surface("w2")
+
+        vm.computeLayout("w1")
+
+        val scene = vm.previewScene.value
+        val tileParts = scene.surface("w1")!!.parts.filter { it.material is SceneMaterial.Tile }
+        assertEquals(1, tileParts.size)
+        assertEquals("tg1", (tileParts.single().material as SceneMaterial.Tile).tileGroupId)
+        assertSame(untouched, scene.surface("w2"), "Unchanged surfaces keep their mesh instance")
+    }
+
+    @Test
+    fun loadSurfacesUsesStoredLayoutsForEverySurface() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("w1", width = 903.0, height = 603.0))
+        tileGroupRepo.tileGroups.add(createTileGroup("tg1"))
+        layoutRepo.save(LayoutResult(surfaceId = "w1", tiles = listOf(PlacedTile(0.0, 0.0, 300.0, 200.0, tileGroupId = "tg1"))))
+
+        vm.loadSurfaces("r1")
+
+        assertTrue(vm.previewScene.value.surface("w1")!!.parts.any { it.material is SceneMaterial.Tile })
     }
 
     // ── Lock Tests ──
@@ -802,39 +1006,35 @@ class RoomEditorViewModelTest {
         assertTrue(vm.cutEntries.value.isNotEmpty(), "onDragEnd computes layout and refreshes cut entries")
     }
 
-    // ── Hit Test Tests ──
+    // ── Pick Tests ──
 
     @Test
-    fun hitTestReturnsSurfaceId() = runTest {
-        setUp()
-        val s1 = Surface(
-            id = "s1", roomId = "r1", type = SurfaceType.WALL,
-            width = 2000.0, height = 1200.0,
-            position = SurfacePosition(0.0, 0.0, 0.0, 0.0),
-        )
-        surfaceRepo.surfaces.add(s1)
-        vm.loadSurfaces("r1")
-
-        val canvasW = 800.0
-        val canvasH = 600.0
-        val centerX = canvasW / 2.0
-        val centerY = canvasH * 0.6
-
-        val hitId = vm.hitTest(centerX, centerY, canvasW, canvasH)
-
-        assertNotNull(hitId, "Tap near isometric origin should hit a surface")
-        assertEquals("s1", hitId, "Should hit the correct surface")
-    }
-
-    @Test
-    fun hitTestReturnsNullWhenNoSurfaceHit() = runTest {
+    fun pickSurfaceAtViewCentreHitsTheWall() = runTest {
         setUp()
         surfaceRepo.surfaces.add(createWallSurface("s1"))
         vm.loadSurfaces("r1")
 
-        val hitId = vm.hitTest(-9999.0, -9999.0, 800.0, 600.0)
+        assertEquals("s1", vm.pickSurface(400.0, 300.0, 800.0, 600.0))
+    }
 
-        assertNull(hitId, "Tap far outside should hit nothing")
+    @Test
+    fun pickSurfaceIgnoresHiddenWalls() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+        vm.toggleSurfaceHidden("s1")
+
+        assertNull(vm.pickSurface(400.0, 300.0, 800.0, 600.0))
+    }
+
+    @Test
+    fun pickSurfaceReturnsNullOffTheRoomOrForEmptyViewport() = runTest {
+        setUp()
+        surfaceRepo.surfaces.add(createWallSurface("s1"))
+        vm.loadSurfaces("r1")
+
+        assertNull(vm.pickSurface(1.0, 1.0, 800.0, 600.0), "Corner of the view is empty space")
+        assertNull(vm.pickSurface(0.0, 0.0, 0.0, 0.0))
     }
 
     // ── Load Tests ──

@@ -94,7 +94,7 @@ data class Surface(
 
 ### Coordinate convention for doorOffset
 
-The offset is measured from the wall's **anchor corner** along the wall's **span direction**, using the same rotation rules as `IsometricProjection.wallWorldCorners`:
+The offset is measured from the wall's **anchor corner** along the wall's **span direction**, using the same rotation rules as `SurfaceFrame.of(surface)` (the 3D preview's surface frame):
 
 - rotation 0 (Front): span +X from anchor
 - rotation 180 (Back): span −X from anchor
@@ -105,19 +105,13 @@ The offset is measured from the wall's **anchor corner** along the wall's **span
 
 ### Surface-local rect (for layout exclusion)
 
-`DoorGeometry.surfaceLocalRect(room, surface)`: returns `RegionRect(doorOffset, 0, doorWidth, doorHeight)` when `surface` is the door wall, else null. This is the same coordinate space as `PlacedTile` positions, so it plugs directly into the layout engine.
-
-### World corners (for 3D preview)
-
-`DoorGeometry.worldCorners(room, surface)`: the door rectangle as four world-space `(x, y, z)` corners on the wall face, computed from the wall's rotation rules + the offset. Platform canvases project them with `IsometricProjection.project()`.
+`DoorGeometry.surfaceLocalRect(room, surface)`: returns `RegionRect(doorOffset, wallHeight − doorHeight, doorWidth, doorHeight)` when `surface` is the door wall, else null (the height is clamped to the wall). This is the same coordinate space as `PlacedTile` positions — layout canvas coordinates with **y running down from the top of the wall** — so the door sits on the floor line in the Layout tab and plugs directly into the layout engine.
 
 ## 3D Preview Rendering
 
-After drawing the wall polygons, both canvases draw the door on the door wall:
+> Updated: the isometric canvas (`IsometricProjection`, `DoorGeometry.worldCorners`, `doorWorldRects`, `hitTest`) was replaced by a real 3D preview (Filament on Android, SceneKit on iOS).
 
-1. Fill the projected door quad with a dark color (`0xFF3A3A3A`) — reads as an opening
-2. Stroke it with a lighter outline
-3. Drawn after the wall fill so it reads as a cutout; before the wall's label
+`RoomSceneBuilder` (shared) receives the surface-local door rect per wall (`RoomEditorViewModel.doorLocalRects`) and cuts the opening through the wall slab and its tiles, adding jamb, header and threshold faces. `SurfaceFrame` maps the layout rect to world space, so the opening is exactly where the Layout tab shows it. `ScenePicker` treats the door wall as the slab minus the opening, so taps through the doorway select what is behind it.
 
 ## Layout Exclusion Semantics
 
@@ -214,7 +208,7 @@ In the **creation sheet** there is no Save button: the tapped wall is part of th
 
 ### Preview & layout door indicators
 
-- **3D preview**: the canvases receive the door quads from the shared layer — `RoomEditorViewModel` exposes `doorWorldRects: StateFlow<Map<String, List<Triple<Double,Double,Double>>>>` (surfaceId → world corners, from `DoorGeometry.worldCorners`). The canvases project them with the same `fitViewport` as the walls and draw the dark opening after the wall fills.
+- **3D preview**: the door is a real opening in the wall mesh (see *3D Preview Rendering*), built from `RoomEditorViewModel.doorLocalRects` by `RoomSceneBuilder`.
 - **2D layout tab**: after drawing tiles, draw a dashed outline rectangle where the door is (the gap tiles already leave it visually open); the outline makes the door explicit. Dashed stroke, gray, 1.5px.
 
 ## Error Handling
