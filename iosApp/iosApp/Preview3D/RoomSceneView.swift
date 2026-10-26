@@ -106,9 +106,10 @@ struct RoomSceneView: UIViewRepresentable {
             guard let view = gesture.view else { return }
             let t = gesture.translation(in: view)
             gesture.setTranslation(.zero, in: view)
-            // Translation follows the content: rolling the wheel away from the user gives +y
+            // Same sign as Compose's scrollDelta on Android: +y means the wheel rolled towards the user
             if t.y != 0 {
-                callbacks?.zoom(OrbitCamera.companion.zoomFactorForScroll(notchesTowardsUser: -Double(t.y) / Self.pointsPerScrollNotch))
+                let notches = Double(t.y) / Self.pointsPerScrollNotch
+                callbacks?.zoom(OrbitCamera.companion.zoomFactorForScroll(notchesTowardsUser: notches))
             }
         }
 
