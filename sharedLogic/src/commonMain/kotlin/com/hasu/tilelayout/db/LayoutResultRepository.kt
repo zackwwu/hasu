@@ -32,6 +32,7 @@ class SqlDelightLayoutResultRepository(private val queries: TileLayoutDbQueries)
                 surface_id = layoutResult.surfaceId,
                 computed_at = layoutResult.computedAt,
                 stale = if (layoutResult.stale) 1L else 0L,
+                door_convention = layoutResult.doorConvention.toLong(),
             )
 
             for (tile in layoutResult.tiles) {
@@ -64,6 +65,7 @@ internal fun Layout_results.toLayoutResult(tiles: List<PlacedTile>): LayoutResul
     tiles = tiles,
     computedAt = computed_at,
     stale = stale != 0L,
+    doorConvention = door_convention.toInt(),
 )
 
 internal fun Placed_tiles.toPlacedTile(): PlacedTile = PlacedTile(

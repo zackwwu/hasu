@@ -150,7 +150,7 @@ class RoomEditorViewModel(
         val ids = _surfaces.value.map { it.id }.toSet()
         _hiddenSurfaceIds.update { it intersect ids }
         refreshDoorRects(roomId)
-        recomputeLayoutsOverlappingDoors()
+        recomputeLegacyDoorLayouts()
         _selectedSurfaceId.value?.let { loadLayoutForSurface(it) }
         recomputeCutEntries()
         refreshPreviewScene()
@@ -171,16 +171,17 @@ class RoomEditorViewModel(
     }
 
     /**
-     * Stored layouts whose tiles cover the door opening were computed for an
-     * older door position (e.g. before door rects moved to the floor line in
-     * layout coordinates); recompute them so tiles and door agree again.
+     * Layouts saved before door rects moved to the floor line excluded the door
+     * at the top of the wall, so their gaps and cuts sit in the wrong place even
+     * when no tile covers the new opening. Recompute every such layout once;
+     * the result is saved with the current convention, so layouts saved since
+     * are left untouched. Surfaces that never had a door recompute to the same
+     * tiles, which is cheaper than knowing where a door used to be.
      */
-    private suspend fun recomputeLayoutsOverlappingDoors() {
-        for ((surfaceId, door) in _doorLocalRects.value) {
-            val tiles = layoutRepo.getBySurface(surfaceId)?.tiles ?: continue
-            if (tiles.any { door.overlaps(RegionRect(it.x, it.y, it.width, it.height)) }) {
-                computeLayout(surfaceId)
-            }
+    private suspend fun recomputeLegacyDoorLayouts() {
+        for (surface in _surfaces.value) {
+            val saved = layoutRepo.getBySurface(surface.id) ?: continue
+            if (saved.doorConvention < LayoutResult.DOOR_CONVENTION_FLOOR) computeLayout(surface.id)
         }
     }
 

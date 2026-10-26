@@ -1,0 +1,2 @@
+-- Rows saved before this migration excluded the door at the top of the wall (convention 0)
+ALTER TABLE layout_results ADD COLUMN door_convention INTEGER NOT NULL DEFAULT 0;
